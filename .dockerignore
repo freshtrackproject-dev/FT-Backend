@@ -4,7 +4,7 @@ npm-debug.log
 yarn-error.log
 
 # Environment files
-.env
+!.env
 .env.local
 .env.development
 .env.production
@@ -35,16 +35,15 @@ Thumbs.db
 .gitmodules
 
 # Model training or large local data
-*.onnx
 *.pt
 *.weights
 *.zip
 *.tar
 *.tar.gz
 *.rar
-data/
 datasets/
 training/
 
-# Optional: keep only model file used in production
+# Optional: include storage data + production model
+!data/storage_data.json
 !models/best.onnx

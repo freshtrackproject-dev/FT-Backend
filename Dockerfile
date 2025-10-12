@@ -1,9 +1,7 @@
-# ==============================
-# 1️⃣ Base image
-# ==============================
-FROM node:20-slim
+# ---- Base Node image ----
+FROM node:18-slim
 
-# Install required system packages for ONNX Runtime and image processing
+# Install system dependencies for ONNXRuntime
 RUN apt-get update && apt-get install -y \
     python3 \
     build-essential \
@@ -13,38 +11,26 @@ RUN apt-get update && apt-get install -y \
     libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# ==============================
-# 2️⃣ Set working directory
-# ==============================
+# Set working directory
 WORKDIR /app
 
-# ==============================
-# 3️⃣ Copy package files
-# ==============================
+# Copy dependency files first (better caching)
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm install --omit=dev
+# Install dependencies (Render automatically sets NODE_ENV=production)
+RUN npm ci --omit=dev
 
-# ==============================
-# 4️⃣ Copy app files
-# ==============================
+# Copy only the necessary project files (based on .dockerignore)
 COPY . .
 
-# Remove this to avoid build errors if .env is ignored
-# COPY .env .env   ❌ (removed for security)
+# Ensure uploads and data folders exist (avoids runtime errors)
+RUN mkdir -p uploads data
 
-# ==============================
-# 5️⃣ Environment setup
-# ==============================
-ENV NODE_ENV=production
-ENV PORT=3000
+# Expose your backend port
+EXPOSE 8080
 
-# Make sure model and upload paths exist
-RUN mkdir -p models uploads
+# Use environment variable if available
+ENV PORT=8080
 
-# ==============================
-# 6️⃣ Expose port and start
-# ==============================
-EXPOSE 3000
-CMD ["npm", "start"]
+# Start the app
+CMD ["node", "server.js"]

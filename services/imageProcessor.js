@@ -123,12 +123,6 @@ async function processImage(filePath) {
   } catch (err) {
     console.error("❌ Detection error:", err);
     throw err;
-  } finally {
-    try {
-      fs.unlinkSync(filePath);
-    } catch {
-      console.warn("ℹ️ Uploaded file already deleted or missing:", filePath);
-    }
   }
 }
 
