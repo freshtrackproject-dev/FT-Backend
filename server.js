@@ -72,14 +72,47 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
     const detections = await processImage(imagePath);
     const processing_time_ms = Date.now() - start;
 
-    // Attach storage info
+    // Attach storage info and normalize detections into the frontend shape
     for (const detection of detections) {
       detection.storage = getStorageData(detection.label);
     }
 
+  const normalizedDetections = detections.map((det) => {
+      // Most YOLO outputs are center-x, center-y, width, height (normalized)
+      const cx = Number(det.x) || 0;
+      const cy = Number(det.y) || 0;
+      const w = Number(det.width) || 0;
+      const h = Number(det.height) || 0;
+
+      let x = cx - w / 2;
+      let y = cy - h / 2;
+
+      // Clamp to [0,1]
+      x = Math.max(0, Math.min(1, x));
+      y = Math.max(0, Math.min(1, y));
+      const width = Math.max(0, Math.min(1, w));
+      const height = Math.max(0, Math.min(1, h));
+
+      const defaultStorage = {
+        storage: det.storage?.storage || det.storage_info?.storage || 'Unknown',
+        shelf_life: det.storage?.shelf_life ?? det.storage_info?.shelf_life ?? null,
+        tips: det.storage?.tips || det.storage_info?.tips || 'No data available',
+        signs_of_spoilage: det.storage?.signs_of_spoilage || det.storage_info?.signs_of_spoilage || 'No data available',
+        status: det.storage?.status || det.storage_info?.status || 'Unknown',
+        waste_disposal: det.storage?.waste_disposal ?? det.storage_info?.waste_disposal ?? null,
+      };
+
+      return {
+        label: det.label,
+        confidence: Number(det.confidence) || 0,
+        bbox: { x, y, width, height },
+        storage: defaultStorage,
+      };
+    });
+
     res.status(200).json({
       success: true,
-      detections,
+      detections: normalizedDetections,
       processing_time_ms,
       timestamp: new Date().toISOString(),
     });
