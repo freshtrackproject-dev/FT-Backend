@@ -1,6 +1,21 @@
 const fs = require("fs");
 const path = require("path");
-const ort = require("onnxruntime-web");
+let ort;
+let ORT_RUNTIME = 'onnxruntime-web';
+try {
+  ort = require('onnxruntime-node');
+  ORT_RUNTIME = 'onnxruntime-node';
+  console.log('⚙️ Using native onnxruntime-node for inference');
+} catch (e) {
+  try {
+    ort = require('onnxruntime-web');
+    ORT_RUNTIME = 'onnxruntime-web';
+    console.log('⚙️ Using onnxruntime-web for inference');
+  } catch (err) {
+    console.error('❌ No onnxruntime runtime available. Please install onnxruntime-node or onnxruntime-web');
+    throw err;
+  }
+}
 const { getStorageData } = require("../services/storageService");
 
 // Path and constants
@@ -47,9 +62,16 @@ class ImageProcessor {
     if (!this.model) {
       console.log(`📦 Loading YOLO model from: ${MODEL_PATH}`);
       try {
-        const arrayBuffer = fs.readFileSync(MODEL_PATH).buffer;
-        this.model = await ort.InferenceSession.create(arrayBuffer);
-        console.log("✅ YOLO model loaded successfully (onnxruntime-web)!");
+        if (ORT_RUNTIME === 'onnxruntime-node') {
+          // onnxruntime-node can accept a path to the model file
+          this.model = await ort.InferenceSession.create(MODEL_PATH);
+          console.log(`✅ YOLO model loaded successfully (${ORT_RUNTIME}) from path`);
+        } else {
+          // onnxruntime-web expects an ArrayBuffer
+          const arrayBuffer = fs.readFileSync(MODEL_PATH).buffer;
+          this.model = await ort.InferenceSession.create(arrayBuffer);
+          console.log(`✅ YOLO model loaded successfully (${ORT_RUNTIME}) from buffer`);
+        }
       } catch (err) {
         console.error("❌ Failed to load ONNX model:", err);
         throw new Error(`Cannot load ONNX model at ${MODEL_PATH}`);
