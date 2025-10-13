@@ -6,7 +6,7 @@ services:
     region: singapore
     autoDeploy: true
 
-    # Render automatically builds from Dockerfile
+    # Docker setup
     dockerfilePath: ./Dockerfile
     dockerCommand: node server.js
 
@@ -16,9 +16,14 @@ services:
         value: production
       - key: PORT
         value: 3000
-      # You can add others like:
-      # - key: STORAGE_PATH
-      #   value: /app/data/storage_data.json
+      - key: MODEL_PATH
+        value: /app/models/best.onnx
+      - key: STORAGE_PATH
+        value: /app/data/storage_data.json
 
-    # Optional: health check for Render to confirm app is running
-    healthCheckPath: /
+    # Health check endpoint (Render pings this)
+    healthCheckPath: /health
+
+    # Auto deploy only from main branch (optional, prevents random deploys)
+    autoDeploy: true
+    branch: main

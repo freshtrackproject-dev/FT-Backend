@@ -1,36 +1,35 @@
-# ---- Base Node image ----
+# ---- Base lightweight Node image ----
 FROM node:18-bullseye-slim
 
-# Install system dependencies for ONNXRuntime
+# No need for build-essential, Python, or libopencv — WASM runs in pure JS
 RUN apt-get update && apt-get install -y \
-    python3 \
-    build-essential \
     libglib2.0-0 \
     libpng-dev \
     libjpeg-dev \
-    libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files first (better caching)
+# Copy dependency files first (for caching)
 COPY package*.json ./
 
-# Install dependencies (Render automatically sets NODE_ENV=production)
+# Install dependencies (Render sets NODE_ENV=production automatically)
 RUN npm ci --omit=dev
 
-# Copy only the necessary project files (based on .dockerignore)
+# Copy source files
 COPY . .
 
-# Ensure uploads and data folders exist (avoids runtime errors)
+# Ensure uploads and data folders exist
 RUN mkdir -p uploads data
 
-# Expose your backend port
-EXPOSE 3000
-
-# Use environment variable if available
+# ✅ Optimize for WebAssembly
+ENV NODE_OPTIONS="--no-experimental-fetch"
 ENV PORT=3000
+ENV ORT_WEB_WASM_PATH="https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/"
+
+# Expose backend port
+EXPOSE 3000
 
 # Start the app
 CMD ["node", "server.js"]

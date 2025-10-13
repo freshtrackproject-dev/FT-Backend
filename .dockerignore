@@ -1,40 +1,41 @@
-# Node dependencies
+# --- Node dependencies ---
 node_modules
 npm-debug.log
 yarn-error.log
 
-# Environment files
-!.env
+# --- Environment files ---
+.env
 .env.local
 .env.development
 .env.production
 
-# Build artifacts and caches
+# --- Build artifacts ---
 dist
 build
 .cache
 coverage
 
-# Local uploads (will be created dynamically in container)
+# --- Uploaded files (runtime generated) ---
 uploads
+data/tmp/
 
-# Logs
+# --- Logs ---
 *.log
 logs/
 debug.log
 
-# System and editor files
+# --- System and editor files ---
 .DS_Store
 Thumbs.db
-.vscode
-.idea
+.vscode/
+.idea/
 
-# Git
+# --- Git metadata ---
 .git
 .gitignore
 .gitmodules
 
-# Model training or large local data
+# --- Model training / large data ---
 *.pt
 *.weights
 *.zip
@@ -44,6 +45,6 @@ Thumbs.db
 datasets/
 training/
 
-# Optional: include storage data + production model
+# --- ✅ Explicitly include essential production data ---
 !data/storage_data.json
 !models/best.onnx
