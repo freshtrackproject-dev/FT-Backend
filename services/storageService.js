@@ -232,6 +232,11 @@ class StorageService {
   }
 
   getStorageData(itemName) {
+    // If no itemName is provided, return the whole storage dataset
+    if (itemName === undefined || itemName === null) {
+      return this.storageData;
+    }
+
     if (!itemName || typeof itemName !== 'string') {
       console.warn('⚠️ Invalid item name:', itemName);
       return null;

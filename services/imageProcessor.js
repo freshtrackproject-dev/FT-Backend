@@ -118,14 +118,24 @@ class ImageProcessor {
         let bestClass = null;
         let bestScore = 0;
 
-        for (let j = 5; j < numAttributes; j++) {
-          if (data[offset + j] > bestScore) {
-            bestScore = data[offset + j];
-            bestClass = j - 5;
+        // Only consider class score entries up to the number of known classes.
+        // Many ONNX YOLO outputs include extra attributes; avoid reading past CLASS_NAMES length.
+        const maxClassEntries = Math.min(numAttributes - 5, CLASS_NAMES.length);
+        for (let j = 0; j < maxClassEntries; j++) {
+          const score = data[offset + 5 + j];
+          if (score > bestScore) {
+            bestScore = score;
+            bestClass = j;
           }
         }
 
-        const label = CLASS_NAMES[bestClass] || `Unknown_${bestClass}`;
+        // Map bestClass to a label, guard against null / out-of-range indexes
+        let label;
+        if (bestClass === null || bestClass < 0 || bestClass >= CLASS_NAMES.length) {
+          label = `Unknown_${bestClass ?? 'na'}`;
+        } else {
+          label = CLASS_NAMES[bestClass];
+        }
         const storageInfo = getStorageData(label);
         if (!storageInfo) console.warn(`⚠️ Missing storage info for ${label}`);
 
