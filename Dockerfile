@@ -27,10 +27,10 @@ COPY . .
 RUN mkdir -p uploads data
 
 # Expose your backend port
-EXPOSE 8080
+EXPOSE 3000
 
 # Use environment variable if available
-ENV PORT=8080
+ENV PORT=3000
 
 # Start the app
 CMD ["node", "server.js"]

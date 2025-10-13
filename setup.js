@@ -50,6 +50,6 @@ console.log('\n📋 Next steps:');
 console.log('   1. Run: npm install');
 console.log('   2. Run: npm run dev');
 console.log('   3. Update API_BASE_URL in your React Native app to point to this backend');
-console.log('   4. Test the API at: http://localhost:8080/health');
+console.log('   4. Test the API at: http://localhost:3000/health');
 
 console.log('\n🎉 Setup complete!');

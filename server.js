@@ -13,7 +13,7 @@ const { getStorageData } = require('./services/storageService');
 const app = express();
 
 // 🧩 Load environment variables with fallbacks
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
 const LOG_FORMAT = process.env.LOG_FORMAT || 'dev';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';

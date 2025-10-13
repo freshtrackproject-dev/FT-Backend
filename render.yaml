@@ -15,7 +15,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 8080
+        value: 3000
       # You can add others like:
       # - key: STORAGE_PATH
       #   value: /app/data/storage_data.json
