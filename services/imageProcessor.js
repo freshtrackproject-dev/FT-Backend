@@ -1,132 +1,218 @@
-// ✅ Use onnxruntime-web for full cross-platform compatibility (Render, Docker, local)
-const ort = require("onnxruntime-web");
-const sharp = require("sharp");
-const Jimp = require("jimp");
 const fs = require("fs");
 const path = require("path");
+const ort = require("onnxruntime-web");
+// const { getStorageData } = require("../services/storageService");
 
+// Path and constants
 const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, "../models/best.onnx");
+const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.5;
+const NMS_THRESHOLD = parseFloat(process.env.NMS_THRESHOLD) || 0.4;
+
+// ✅ Class names (must match YOLO training order)
 const CLASS_NAMES = [
-  "Fresh_Apple", "Fresh_Banana", "Fresh_Beef", "Fresh_Carrot", "Fresh_Chicken",
-  "Fresh_Cucumber", "Fresh_Manggo", "Fresh_Okra", "Fresh_Orange", "Fresh_Pepper",
-  "Fresh_Pork", "Fresh_Potato", "Fresh_Strawberry",
-  "Rotten_Apple", "Rotten_Banana", "Rotten_Beef", "Rotten_Carrot", "Rotten_Chicken",
-  "Rotten_Cucumber", "Rotten_Manggo", "Rotten_Okra", "Rotten_Orange", "Rotten_Pepper",
-  "Rotten_Pork", "Rotten_Potato", "Rotten_Strawberry"
+  "Fresh_Apple",
+  "Fresh_Banana",
+  "Fresh_Beef",
+  "Fresh_Carrot",
+  "Fresh_Chicken",
+  "Fresh_Cucumber",
+  "Fresh_Manggo",
+  "Fresh_Okra",
+  "Fresh_Orange",
+  "Fresh_Pepper",
+  "Fresh_Pork",
+  "Fresh_Potato",
+  "Fresh_Strawberry",
+  "Rotten_Apple",
+  "Rotten_Banana",
+  "Rotten_Beef",
+  "Rotten_Carrot",
+  "Rotten_Chicken",
+  "Rotten_Cucumber",
+  "Rotten_Manggo",
+  "Rotten_Okra",
+  "Rotten_Orange",
+  "Rotten_Pepper",
+  "Rotten_Pork",
+  "Rotten_Potato",
+  "Rotten_Strawberry",
 ];
 
-let session = null;
-
-// ✅ Load ONNX model with WASM backend
-async function loadModel() {
-  if (!session) {
-    console.log(`📦 Loading YOLO model (WASM) from: ${MODEL_PATH}`);
-
-    // ✅ Required for WASM backend to locate runtime files
-    ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/";
-
-    session = await ort.InferenceSession.create(MODEL_PATH, {
-      executionProviders: ["wasm"],
-    });
-
-    console.log("✅ YOLO model loaded successfully with WASM backend!");
+class ImageProcessor {
+  constructor() {
+    this.model = null;
   }
-  return session;
-}
 
-// ✅ Preprocess image → tensor
-async function preprocessImage(imagePath) {
-  console.log(`🖼️ Preprocessing image: ${imagePath}`);
-
-  try {
-    const image = sharp(imagePath).resize(640, 640).toColorspace("srgb");
-    const buffer = await image.raw().toBuffer({ resolveWithObject: true });
-    const { data, info } = buffer;
-    const floatArray = new Float32Array(info.width * info.height * 3);
-
-    // Normalize pixel values [0–1]
-    for (let i = 0; i < data.length; i++) {
-      floatArray[i] = data[i] / 255.0;
+  async loadModel() {
+    if (!this.model) {
+      console.log(`📦 Loading YOLO model from: ${MODEL_PATH}`);
+      try {
+        const arrayBuffer = fs.readFileSync(MODEL_PATH).buffer;
+        this.model = await ort.InferenceSession.create(arrayBuffer);
+        console.log("✅ YOLO model loaded successfully (onnxruntime-web)!");
+      } catch (err) {
+        console.error("❌ Failed to load ONNX model:", err);
+        throw new Error(`Cannot load ONNX model at ${MODEL_PATH}`);
+      }
     }
+  }
 
-    return new ort.Tensor("float32", floatArray, [1, 3, info.height, info.width]);
-  } catch (err) {
-    console.warn("❌ sharp processing failed, fallback to Jimp:", err.message);
+  async preprocessImage(imagePath) {
+    const jimpModule = await import("jimp");
+    const Jimp = jimpModule.default;
 
-    const img = await Jimp.read(imagePath);
-    img.resize(640, 640);
-    const data = new Float32Array(3 * 640 * 640);
-    let idx = 0;
+    if (!fs.existsSync(imagePath)) throw new Error(`Image not found: ${imagePath}`);
 
-    for (let y = 0; y < 640; y++) {
-      for (let x = 0; x < 640; x++) {
-        const { r, g, b } = Jimp.intToRGBA(img.getPixelColor(x, y));
-        data[idx++] = r / 255.0;
-        data[idx++] = g / 255.0;
-        data[idx++] = b / 255.0;
+    console.log("🖼️ Preprocessing image:", imagePath);
+    const image = await Jimp.read(imagePath);
+
+    const size = 416;
+    await image.resize(size, size);
+
+    const input = new Float32Array(3 * size * size);
+    let i = 0;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const pixel = image.getPixelColor(x, y);
+        const rgba = Jimp.intToRGBA(pixel);
+        input[i++] = rgba.r / 255;
+        input[i++] = rgba.g / 255;
+        input[i++] = rgba.b / 255;
       }
     }
 
-    return new ort.Tensor("float32", data, [1, 3, 640, 640]);
-  }
-}
-
-// ✅ Postprocess YOLO output
-function postprocess(outputData, threshold = 0.25) {
-  const numDetections = outputData.length / (5 + CLASS_NAMES.length);
-  const detections = [];
-
-  for (let i = 0; i < numDetections; i++) {
-    const offset = i * (5 + CLASS_NAMES.length);
-    const x = outputData[offset];
-    const y = outputData[offset + 1];
-    const w = outputData[offset + 2];
-    const h = outputData[offset + 3];
-    const objectness = outputData[offset + 4];
-
-    let bestScore = 0;
-    let bestClass = -1;
-
-    for (let j = 5; j < 5 + CLASS_NAMES.length; j++) {
-      if (outputData[offset + j] > bestScore) {
-        bestScore = outputData[offset + j];
-        bestClass = j - 5;
-      }
-    }
-
-    const score = objectness * bestScore;
-    if (score > threshold) {
-      detections.push({
-        className: CLASS_NAMES[bestClass] || "Unknown",
-        confidence: score.toFixed(2),
-        bbox: [x, y, w, h],
-      });
-    }
+    return new ort.Tensor("float32", input, [1, 3, size, size]);
   }
 
-  return detections;
-}
+  async detectObjects(imagePath) {
+    await this.loadModel();
+    const inputTensor = await this.preprocessImage(imagePath);
+    let results;
 
-// ✅ Main detection function
-async function processImage(filePath) {
-  const start = Date.now();
-  try {
-    const model = await loadModel();
-    const tensor = await preprocessImage(filePath);
-    const feeds = { images: tensor };
-    const results = await model.run(feeds);
+    try {
+      results = await this.model.run({ images: inputTensor });
+    } catch (err) {
+      console.error("❌ Inference failed:", err);
+      throw new Error("ONNX inference failed");
+    }
 
     const output = results[Object.keys(results)[0]];
-    const detections = postprocess(output.data);
+    return this.postprocess(output);
+  }
 
-    const duration = ((Date.now() - start) / 1000).toFixed(2);
-    console.log(`✅ Detection complete: ${detections.length} objects found in ${duration}s`);
+  postprocess(output) {
+    const data = output.data;
+    const numPredictions = output.dims[1];
+    const numAttributes = output.dims[2];
+    const detections = [];
 
-    return detections;
-  } catch (err) {
-    console.error("❌ Detection error:", err);
-    throw err;
+    for (let i = 0; i < numPredictions; i++) {
+      const offset = i * numAttributes;
+      const x = data[offset];
+      const y = data[offset + 1];
+      const w = data[offset + 2];
+      const h = data[offset + 3];
+      const conf = data[offset + 4];
+
+      if (conf >= CONFIDENCE_THRESHOLD) {
+        let bestClass = null;
+        let bestScore = 0;
+
+        for (let j = 5; j < numAttributes; j++) {
+          if (data[offset + j] > bestScore) {
+            bestScore = data[offset + j];
+            bestClass = j - 5;
+          }
+        }
+
+        const label = CLASS_NAMES[bestClass] || `Unknown_${bestClass}`;
+        const storageInfo = getStorageData(label);
+        if (!storageInfo) console.warn(`⚠️ Missing storage info for ${label}`);
+
+        detections.push({
+          x,
+          y,
+          width: w,
+          height: h,
+          confidence: conf,
+          class_id: bestClass,
+          label,
+          storage_info: storageInfo || {
+            storage: "Unknown",
+            shelf_life: null,
+            tips: "No data available",
+            status: "Unknown",
+          },
+        });
+      }
+    }
+
+    return this.nonMaxSuppression(detections, NMS_THRESHOLD);
+  }
+
+  nonMaxSuppression(boxes, threshold) {
+    if (boxes.length === 0) return [];
+    boxes.sort((a, b) => b.confidence - a.confidence);
+    const selected = [];
+
+    const iou = (a, b) => {
+      const xA = Math.max(a.x, b.x);
+      const yA = Math.max(a.y, b.y);
+      const xB = Math.min(a.x + a.width, b.x + b.width);
+      const yB = Math.min(a.y + a.height, b.y + b.height);
+      const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
+      const boxAArea = a.width * a.height;
+      const boxBArea = b.width * b.height;
+      return interArea / (boxAArea + boxBArea - interArea);
+    };
+
+    while (boxes.length > 0) {
+      const current = boxes.shift();
+      selected.push(current);
+      boxes = boxes.filter((b) => iou(current, b) < threshold);
+    }
+
+    return selected;
   }
 }
 
-module.exports = { processImage };
+const imageProcessor = new ImageProcessor();
+
+async function processImage(filePath) {
+  const detectionDate = new Date().toISOString();
+  try {
+    const detections = await imageProcessor.detectObjects(filePath);
+
+    // ✅ Add calculated shelf life data
+    const enriched = detections.map((det) => {
+      const info = det.storage_info;
+      if (info && info.shelf_life) {
+        const daysElapsed = 0;
+        return {
+          ...det,
+          detection_date: detectionDate,
+          remaining_life: info.shelf_life - daysElapsed,
+        };
+      }
+      return det;
+    });
+
+    console.log(`✅ Detection complete: ${enriched.length} objects found`);
+    return enriched;
+  } catch (error) {
+    console.error("❌ Error during YOLO detection:", error);
+    throw error;
+  } finally {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      console.info(`ℹ️ Uploaded file already deleted or missing: ${filePath}`);
+    }
+  }
+}
+
+async function preloadModel() {
+  await imageProcessor.loadModel();
+}
+
+module.exports = { processImage, preloadModel };
