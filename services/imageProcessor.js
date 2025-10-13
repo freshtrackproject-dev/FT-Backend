@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const ort = require("onnxruntime-web");
-// const { getStorageData } = require("../services/storageService");
+const { getStorageData } = require("../services/storageService");
 
 // Path and constants
 const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, "../models/best.onnx");
