@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-const { processImage } = require('./services/imageProcessor');
+const { processImage, preloadModel } = require('./services/imageProcessor');
 const { getStorageData } = require('./services/storageService');
 
 const app = express();
@@ -68,7 +68,9 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
     console.log(`🖼️ Preprocessing image: ${imagePath}`);
 
     // Run model detection
+    const start = Date.now();
     const detections = await processImage(imagePath);
+    const processing_time_ms = Date.now() - start;
 
     // Attach storage info
     for (const detection of detections) {
@@ -78,18 +80,10 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
     res.status(200).json({
       success: true,
       detections,
+      processing_time_ms,
       timestamp: new Date().toISOString(),
     });
-
-    // 🧹 Safe cleanup
-    if (fs.existsSync(imagePath)) {
-      fs.unlink(imagePath, (err) => {
-        if (err) console.warn('⚠️ Could not delete uploaded file:', err.message);
-        else console.log(`🧼 Deleted uploaded file: ${imagePath}`);
-      });
-    } else {
-      console.log(`ℹ️ Uploaded file already deleted or missing: ${imagePath}`);
-    }
+    // Note: processImage already attempts to delete the uploaded file. No further cleanup here.
   } catch (error) {
     console.error('❌ Detection error:', error);
     res.status(500).json({ success: false, message: 'Error processing image', error: error.message });
@@ -138,6 +132,15 @@ setInterval(() => {
 // ==============================
 // 🚀 Start server
 // ==============================
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
-});
+// Preload model and then start server
+(async () => {
+  try {
+    await preloadModel();
+  } catch (err) {
+    console.warn('⚠️ Model preload failed, continuing to start server:', err.message);
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+  });
+})();
