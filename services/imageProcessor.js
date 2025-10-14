@@ -262,6 +262,39 @@ class ImageProcessor {
 
 const imageProcessor = new ImageProcessor();
 
+// Diagnostic: get model info (runtime, output names/dims, inferred class count)
+async function getModelInfo() {
+  await imageProcessor.loadModel();
+  if (!imageProcessor.model) return { loaded: false };
+
+  // attempt a single forward with zeros to inspect output dims
+  try {
+    const size = 416;
+    const input = new Float32Array(3 * size * size);
+    const tensor = new ort.Tensor('float32', input, [1, 3, size, size]);
+    const results = await imageProcessor.model.run({ images: tensor });
+    const outputName = Object.keys(results)[0];
+    const out = results[outputName];
+    const dims = out.dims || [];
+    // infer class count: if dims length >=3 and attrs >=6, classCount = attrs - 5
+    let classCount = null;
+    if (dims.length >= 3) {
+      const numAttributes = dims[2];
+      if (numAttributes > 5) classCount = Math.max(0, numAttributes - 5);
+    }
+
+    return {
+      loaded: true,
+      runtime: ORT_RUNTIME,
+      outputName,
+      outputDims: dims,
+      inferred_class_count: classCount,
+    };
+  } catch (err) {
+    return { loaded: true, runtime: ORT_RUNTIME, error: String(err) };
+  }
+}
+
 async function processImage(filePath) {
   const detectionDate = new Date().toISOString();
   try {

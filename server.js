@@ -9,6 +9,7 @@ require('dotenv').config();
 
 const { processImage, preloadModel } = require('./services/imageProcessor');
 const { getStorageData } = require('./services/storageService');
+const { getModelInfo } = require('./services/imageProcessor');
 
 const app = express();
 
@@ -140,6 +141,19 @@ app.get('/api/storage', (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching storage data:', error);
     res.status(500).json({ success: false, message: 'Error fetching storage data' });
+  }
+});
+
+// ==============================
+// 🔍 Model info (diagnostic)
+// ==============================
+app.get('/api/model-info', async (req, res) => {
+  try {
+    const info = await getModelInfo();
+    res.json({ success: true, info });
+  } catch (err) {
+    console.error('❌ Model info error:', err);
+    res.status(500).json({ success: false, error: String(err) });
   }
 });
 
