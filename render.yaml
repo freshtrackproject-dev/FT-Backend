@@ -6,24 +6,49 @@ services:
     region: singapore
     autoDeploy: true
 
-    # Docker setup
+    # Docker setup for Node service
     dockerfilePath: ./Dockerfile
     dockerCommand: node server.js
 
-    # Environment variables
+    # Environment variables for Node service
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3000
-      - key: MODEL_PATH
-        value: /app/models/best.onnx
+      - key: INFERENCE_URL
+        # The internal service name + port that will be reachable in the Render network
+        value: http://freshtrack-inference:8001/infer
       - key: STORAGE_PATH
         value: /app/data/storage_data.json
 
-    # Health check endpoint (Render pings this)
     healthCheckPath: /health
 
-    # Auto deploy only from main branch (optional, prevents random deploys)
+    autoDeploy: true
+    branch: main
+
+  - type: web
+    name: freshtrack-inference
+    env: docker
+    plan: free
+    region: singapore
+    autoDeploy: true
+
+    # Docker setup for Python inference service
+    dockerfilePath: ./Dockerfile.python
+    dockerCommand: uvicorn tools.inference_service:app --host 0.0.0.0 --port 8001
+
+    envVars:
+      - key: PORT
+        value: 8001
+      - key: MODEL_PATH
+        value: /app/models/best.pt
+      - key: MODEL_URL
+        # If you prefer to download the model at container start instead of baking it into the image,
+        # set MODEL_URL to a publicly accessible or presigned URL (S3, GCS, etc.).
+        value: ""
+
+    healthCheckPath: /health
+
     autoDeploy: true
     branch: main

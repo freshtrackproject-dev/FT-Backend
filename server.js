@@ -1,4 +1,11 @@
+
 const express = require('express');
+const app = express();
+
+// /api/health endpoint for Docker Compose and frontend health checks
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', service: 'node-backend', time: new Date().toISOString() });
+});
 const cors = require('cors');
 const multer = require('multer');
 const helmet = require('helmet');
@@ -11,7 +18,7 @@ const { processImage, preloadModel } = require('./services/imageProcessor');
 const { getStorageData } = require('./services/storageService');
 const { getModelInfo } = require('./services/imageProcessor');
 
-const app = express();
+
 
 // 🧩 Load environment variables with fallbacks
 const PORT = process.env.PORT || 3000;

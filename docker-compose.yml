@@ -1,0 +1,41 @@
+services:
+  inference:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: freshtrack-inference
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - MODEL_URL=${MODEL_URL:-}
+    volumes:
+      - ./models:/app/models
+      - ./tools:/app/tools
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: freshtrack-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - INFERENCE_URL=http://inference:8001/infer
+      - STORAGE_PATH=/app/data/storage_data.json
+    volumes:
+      - ./uploads:/app/uploads
+      - ./data:/app/data
+    depends_on:
+      inference:
+        condition: service_healthy
+
+networks:
+  default:
+    name: freshtrack-net

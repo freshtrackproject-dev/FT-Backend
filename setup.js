@@ -36,14 +36,13 @@ if (!fs.existsSync(envPath) && fs.existsSync(envExamplePath)) {
 }
 
 // Check if model exists
-const modelPath = path.join(__dirname, 'models', 'best.onnx');
+// ONNX modelPath is unused; detection is handled by Python service with .pt model
 if (fs.existsSync(modelPath)) {
   console.log('🤖 YOLO model found');
 } else {
   console.log('⚠️  No YOLO model found. The system will use mock detections for development.');
   console.log('   To add your model:');
-  console.log('   1. Convert your YOLO model to ONNX format');
-  console.log('   2. Place it as "best.onnx" in the models/ directory');
+  // ONNX conversion instructions removed; use best.pt in models/ for Python inference
 }
 
 console.log('\n📋 Next steps:');

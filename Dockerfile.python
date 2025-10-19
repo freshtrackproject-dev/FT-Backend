@@ -1,0 +1,33 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps for OpenCV, Pillow, and ultralytics
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    ca-certificates \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    ffmpeg \
+    libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source
+COPY . .
+
+ENV PORT=8001
+EXPOSE 8001
+
+# Copy and make startup script executable
+RUN chmod +x /app/tools/download_and_run.sh || true
+CMD ["/app/tools/download_and_run.sh"]

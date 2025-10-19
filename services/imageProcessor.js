@@ -1,25 +1,16 @@
 const fs = require("fs");
 const path = require("path");
-let ort;
-let ORT_RUNTIME = 'onnxruntime-web';
-try {
-  ort = require('onnxruntime-node');
-  ORT_RUNTIME = 'onnxruntime-node';
-  console.log('⚙️ Using native onnxruntime-node for inference');
-} catch (e) {
-  try {
-    ort = require('onnxruntime-web');
-    ORT_RUNTIME = 'onnxruntime-web';
-    console.log('⚙️ Using onnxruntime-web for inference');
-  } catch (err) {
-    console.error('❌ No onnxruntime runtime available. Please install onnxruntime-node or onnxruntime-web');
-    throw err;
-  }
-}
 const { getStorageData } = require("../services/storageService");
 
+// Forward inference to a Python service (Ultralytics) by default
+const INFERENCE_URL = process.env.INFERENCE_URL || 'http://localhost:8001/infer';
+
+// Use Node.js http module and form-data for multipart
+const http = require('http');
+const FormDataImpl = require('form-data');
+
 // Path and constants
-const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, "../models/best.onnx");
+// MODEL_PATH is not used; detection is forwarded to Python service
 const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.5;
 const NMS_THRESHOLD = parseFloat(process.env.NMS_THRESHOLD) || 0.4;
 
@@ -59,240 +50,82 @@ class ImageProcessor {
   }
 
   async loadModel() {
-    if (!this.model) {
-      console.log(`📦 Loading YOLO model from: ${MODEL_PATH}`);
-      try {
-        const resolved = path.resolve(MODEL_PATH);
-        console.log(`🔎 Resolved model path: ${resolved}`);
-        const exists = fs.existsSync(resolved);
-        console.log(`📁 Model file exists: ${exists}`);
-        if (exists) {
-          try {
-            const stat = fs.statSync(resolved);
-            console.log(`📦 Model file size: ${stat.size} bytes`);
-          } catch (sErr) {
-            console.warn('⚠️ Could not stat model file:', sErr.message);
-          }
-        }
-      } catch (diagErr) {
-        console.warn('⚠️ Model path diagnostics failed:', diagErr.message);
-      }
-      try {
-        if (ORT_RUNTIME === 'onnxruntime-node') {
-          // onnxruntime-node can accept a path to the model file
-          this.model = await ort.InferenceSession.create(MODEL_PATH);
-          console.log(`✅ YOLO model loaded successfully (${ORT_RUNTIME}) from path`);
-        } else {
-          // onnxruntime-web expects an ArrayBuffer
-          const arrayBuffer = fs.readFileSync(MODEL_PATH).buffer;
-          this.model = await ort.InferenceSession.create(arrayBuffer);
-          console.log(`✅ YOLO model loaded successfully (${ORT_RUNTIME}) from buffer`);
-        }
-      } catch (err) {
-        console.error("❌ Failed to load ONNX model:", err && err.stack ? err.stack : err);
-        // Provide hints
-        if (!fs.existsSync(MODEL_PATH)) {
-          console.error('❌ Hint: model file does not exist at the configured path. Check MODEL_PATH env or file placement.');
-        } else {
-          console.error('❌ Hint: model file exists but failed to load. This could be due to incompatible model format or runtime mismatch.');
-        }
-        throw err;
-      }
-    }
+    // Using remote PyTorch inference service — nothing to preload here.
+    return;
   }
 
-  async preprocessImage(imagePath) {
-    const jimpModule = await import("jimp");
-    const Jimp = jimpModule.default;
-
-    if (!fs.existsSync(imagePath)) throw new Error(`Image not found: ${imagePath}`);
-
-    console.log("🖼️ Preprocessing image:", imagePath);
-    const image = await Jimp.read(imagePath);
-
-    const size = 416;
-    await image.resize(size, size);
-
-    const input = new Float32Array(3 * size * size);
-    let i = 0;
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const pixel = image.getPixelColor(x, y);
-        const rgba = Jimp.intToRGBA(pixel);
-        input[i++] = rgba.r / 255;
-        input[i++] = rgba.g / 255;
-        input[i++] = rgba.b / 255;
-      }
-    }
-
-    return new ort.Tensor("float32", input, [1, 3, size, size]);
-  }
+  // preprocessImage is unused; all preprocessing is handled by Python service
 
   async detectObjects(imagePath) {
-    await this.loadModel();
-    const inputTensor = await this.preprocessImage(imagePath);
-    let results;
+    // Forward image to Python inference service and expect detections in same basic shape
+    return new Promise((resolve, reject) => {
+      const form = new FormDataImpl();
+      const fileStream = fs.createReadStream(imagePath);
+      form.append('image', fileStream, { filename: path.basename(imagePath) });
 
-    try {
-      results = await this.model.run({ images: inputTensor });
-    } catch (err) {
-      console.error("❌ Inference failed:", err);
-      throw new Error("ONNX inference failed");
-    }
-
-    const output = results[Object.keys(results)[0]];
-    return this.postprocess(output);
-  }
-
-  postprocess(output) {
-    const data = output.data;
-    const numPredictions = output.dims[1];
-    const numAttributes = output.dims[2];
-    const detections = [];
-
-    for (let i = 0; i < numPredictions; i++) {
-      const offset = i * numAttributes;
-      const x = data[offset];
-      const y = data[offset + 1];
-      const w = data[offset + 2];
-      const h = data[offset + 3];
-      const conf = data[offset + 4];
-
-      // Build class scores array (bounded by known classes)
-      const maxClassEntries = Math.min(numAttributes - 5, CLASS_NAMES.length);
-      const classScores = [];
-      for (let j = 0; j < maxClassEntries; j++) {
-        classScores.push(data[offset + 5 + j]);
-      }
-
-      // Helper: sigmoid for objectness, softmax for class probs
-      const sigmoid = (x) => 1 / (1 + Math.exp(-x));
-      const softmax = (arr) => {
-        const max = Math.max(...arr);
-        const exps = arr.map((v) => Math.exp(v - max));
-        const sum = exps.reduce((s, e) => s + e, 0);
-        return exps.map((e) => e / sum);
+      const options = {
+        hostname: 'inference',
+        port: 8001,
+        path: '/infer',
+        method: 'POST',
+        headers: form.getHeaders()
       };
 
-      // If classScores is empty, skip
-      if (classScores.length === 0) continue;
-
-      // Convert raw scores to probabilities
-      let classProbs;
-      try {
-        classProbs = softmax(classScores);
-      } catch (e) {
-        classProbs = classScores.map((v) => v);
-      }
-
-      // Best class index and its probability
-      let bestClass = 0;
-      let bestClassProb = classProbs[0] || 0;
-      for (let k = 1; k < classProbs.length; k++) {
-        if (classProbs[k] > bestClassProb) {
-          bestClassProb = classProbs[k];
-          bestClass = k;
-        }
-      }
-
-      // Compute final confidence as sigmoid(objectness) * class_probability
-      const objectness = Number(conf);
-      const objProb = Number.isFinite(objectness) ? sigmoid(objectness) : 0;
-      let finalConf = objProb * (bestClassProb || 0);
-      // Clamp 0..1
-      finalConf = Math.max(0, Math.min(1, finalConf));
-
-      if (finalConf >= CONFIDENCE_THRESHOLD) {
-        // Map bestClass to a label, guard against null / out-of-range indexes
-        let label;
-        if (bestClass === null || bestClass < 0 || bestClass >= CLASS_NAMES.length) {
-          label = `Unknown_${bestClass ?? 'na'}`;
-        } else {
-          label = CLASS_NAMES[bestClass];
-        }
-        const storageInfo = getStorageData(label);
-        if (!storageInfo) console.warn(`⚠️ Missing storage info for ${label}`);
-
-        detections.push({
-          x,
-          y,
-          width: w,
-          height: h,
-          confidence: finalConf,
-          class_id: bestClass,
-          label,
-          storage_info: storageInfo || {
-            storage: "Unknown",
-            shelf_life: null,
-            tips: "No data available",
-            status: "Unknown",
-          },
+      const req = http.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
         });
-      }
-    }
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              throw new Error(`Inference service error: ${res.statusCode} ${res.statusMessage} ${data}`);
+            }
+            const json = JSON.parse(data);
+            // Expect json.detections as array of {x,y,width,height,confidence,class_id,label}
+            // Map to internal postprocess-like detections with storage_info
+            const detections = (json.detections || []).map((d) => ({
+              x: d.x,
+              y: d.y,
+              width: d.width,
+              height: d.height,
+              confidence: d.confidence,
+              class_id: d.class_id,
+              label: d.label,
+              storage_info: getStorageData(d.label) || null,
+            }));
+            resolve(detections);
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
 
-    return this.nonMaxSuppression(detections, NMS_THRESHOLD);
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      form.pipe(req);
+    });
   }
 
-  nonMaxSuppression(boxes, threshold) {
-    if (boxes.length === 0) return [];
-    boxes.sort((a, b) => b.confidence - a.confidence);
-    const selected = [];
+  // postprocess is unused; all postprocessing is handled by Python service
 
-    const iou = (a, b) => {
-      const xA = Math.max(a.x, b.x);
-      const yA = Math.max(a.y, b.y);
-      const xB = Math.min(a.x + a.width, b.x + b.width);
-      const yB = Math.min(a.y + a.height, b.y + b.height);
-      const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
-      const boxAArea = a.width * a.height;
-      const boxBArea = b.width * b.height;
-      return interArea / (boxAArea + boxBArea - interArea);
-    };
-
-    while (boxes.length > 0) {
-      const current = boxes.shift();
-      selected.push(current);
-      boxes = boxes.filter((b) => iou(current, b) < threshold);
-    }
-
-    return selected;
-  }
+  // nonMaxSuppression is unused; all NMS is handled by Python service
 }
 
 const imageProcessor = new ImageProcessor();
 
-// Diagnostic: get model info (runtime, output names/dims, inferred class count)
+// Diagnostic: get model info
+// In the current setup we forward inference to a Python service (Ultralytics .pt).
+// This helper returns a safe diagnostic object suitable for the Node server's
+// /api/model-info endpoint without attempting to load ONNX runtimes locally.
 async function getModelInfo() {
-  await imageProcessor.loadModel();
-  if (!imageProcessor.model) return { loaded: false };
-
-  // attempt a single forward with zeros to inspect output dims
-  try {
-    const size = 416;
-    const input = new Float32Array(3 * size * size);
-    const tensor = new ort.Tensor('float32', input, [1, 3, size, size]);
-    const results = await imageProcessor.model.run({ images: tensor });
-    const outputName = Object.keys(results)[0];
-    const out = results[outputName];
-    const dims = out.dims || [];
-    // infer class count: if dims length >=3 and attrs >=6, classCount = attrs - 5
-    let classCount = null;
-    if (dims.length >= 3) {
-      const numAttributes = dims[2];
-      if (numAttributes > 5) classCount = Math.max(0, numAttributes - 5);
-    }
-
-    return {
-      loaded: true,
-      runtime: ORT_RUNTIME,
-      outputName,
-      outputDims: dims,
-      inferred_class_count: classCount,
-    };
-  } catch (err) {
-    return { loaded: true, runtime: ORT_RUNTIME, error: String(err) };
-  }
+  return {
+    loaded: false,
+    mode: 'pt-forwarding',
+    message: 'Model diagnostics are handled by the Python inference service. Call the inference service /health or /model-info if exposed there.',
+  };
 }
 
 async function processImage(filePath) {
@@ -332,4 +165,4 @@ async function preloadModel() {
   await imageProcessor.loadModel();
 }
 
-module.exports = { processImage, preloadModel };
+module.exports = { processImage, preloadModel, getModelInfo };
