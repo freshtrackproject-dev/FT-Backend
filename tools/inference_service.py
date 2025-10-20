@@ -20,6 +20,7 @@ import shutil
 import tempfile
 import uvicorn
 import os
+import numpy as np
 
 app = FastAPI(title="PyTorch Inference Service")
 
@@ -184,22 +185,55 @@ async def infer(image: UploadFile = File(...)):
         # Extract arrays with detailed debugging
         print("DEBUG: Attempting to extract normalized coordinates...")
         try:
-            # Handle either obb or regular detection boxes
+            print("DEBUG: Checking OBB attributes...")
             if hasattr(r, 'obb') and r.obb is not None:
-                print("DEBUG: Found OBB format, converting to axis-aligned boxes")
-                # Get the axis-aligned bounding boxes from OBB
+                print("DEBUG: Found OBB object:", r.obb)
+                print("DEBUG: OBB attributes:", dir(r.obb))
                 boxes = r.obb.cpu()
-                xyxy = boxes.xyxy.numpy()  # Get axis-aligned boxes
-                confs = boxes.conf.numpy()
-                clss = boxes.cls.numpy().astype(int)
+                print("DEBUG: OBB boxes attributes:", dir(boxes))
+                
+                # Try to get boxes in the right format
+                if hasattr(boxes, 'xyxy'):
+                    print("DEBUG: Using OBB xyxy format")
+                    xyxy = boxes.xyxy.numpy()
+                elif hasattr(boxes, 'xywh'):
+                    print("DEBUG: Converting OBB xywh to xyxy format")
+                    xywh = boxes.xywh.numpy()
+                    # Convert xywh to xyxy
+                    xyxy = []
+                    for x, y, w, h in xywh:
+                        x1 = x - w/2
+                        y1 = y - h/2
+                        x2 = x + w/2
+                        y2 = y + h/2
+                        xyxy.append([x1, y1, x2, y2])
+                    xyxy = np.array(xyxy)
+                else:
+                    print("DEBUG: No recognized box format in OBB")
+                    print("DEBUG: Available OBB box attributes:", dir(boxes))
+                    raise ValueError("No recognized box format in OBB object")
+                
+                # Get confidence and class
+                if hasattr(boxes, 'conf'):
+                    confs = boxes.conf.numpy()
+                else:
+                    print("DEBUG: No confidence scores found")
+                    confs = np.ones(len(xyxy))
+                
+                if hasattr(boxes, 'cls'):
+                    clss = boxes.cls.numpy().astype(int)
+                else:
+                    print("DEBUG: No class indices found")
+                    clss = np.zeros(len(xyxy), dtype=int)
+                
             elif hasattr(r, 'boxes') and r.boxes is not None:
-                print("DEBUG: Found regular detection boxes")
+                print("DEBUG: Using regular detection boxes")
                 boxes = r.boxes.cpu()
                 xyxy = boxes.xyxy.numpy()
                 confs = boxes.conf.numpy()
                 clss = boxes.cls.numpy().astype(int)
             else:
-                print("DEBUG: No boxes found in results")
+                print("DEBUG: No detection boxes found in results")
                 return JSONResponse({'success': True, 'detections': []})
 
             print(f"DEBUG: xyxy shape: {xyxy.shape}, values: {xyxy}")
