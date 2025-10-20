@@ -212,12 +212,10 @@ async def infer(image: UploadFile = File(...)):
                 raise ValueError("No recognized coordinate format in boxes object")
         except Exception as e:
             print(f"DEBUG: Error extracting coordinates: {str(e)}")
-            raise
-            except Exception:
-                # last fallback: empty
-                xywhn = []
-                confs = []
-                clss = []
+            # last fallback: empty
+            xywhn = []
+            confs = []
+            clss = []
 
         for i in range(len(xywhn)):
             cx, cy, ww, hh = xywhn[i]
