@@ -15,10 +15,10 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3000
+        value: 10000
       - key: INFERENCE_URL
         # The internal service name + port that will be reachable in the Render network
-        value: http://freshtrack-inference:8001/infer
+        value: https://freshtrack-backend-1.onrender.com/infer
       - key: STORAGE_PATH
         value: /app/data/storage_data.json
 
@@ -28,7 +28,7 @@ services:
     branch: main
 
   - type: web
-    name: freshtrack-inference
+    name: freshtrack-backend-1
     env: docker
     plan: free
     region: singapore

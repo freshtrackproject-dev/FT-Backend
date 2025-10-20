@@ -25,11 +25,11 @@ RUN mkdir -p uploads data
 
 # ✅ Optimize for WebAssembly
 ENV NODE_OPTIONS="--no-experimental-fetch"
-ENV PORT=3000
+ENV PORT=10000
 ENV ORT_WEB_WASM_PATH="https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/"
 
 # Expose backend port
-EXPOSE 3000
+EXPOSE 10000
 
 # Start the app
 CMD ["node", "server.js"]
