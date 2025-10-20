@@ -44,6 +44,14 @@ app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: process.env.MAX_UPLOAD_SIZE || '10mb' }));
 app.use(morgan(LOG_FORMAT));
 
+// Increase timeout for long-running requests
+app.use((req, res, next) => {
+  // Set timeout to 2 minutes
+  req.setTimeout(120000);
+  res.setTimeout(120000);
+  next();
+});
+
 // ==============================
 // 📁 Uploads folder setup
 // ==============================

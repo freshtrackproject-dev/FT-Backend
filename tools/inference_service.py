@@ -85,11 +85,16 @@ async def health():
 
 @app.post('/infer')
 async def infer(image: UploadFile = File(...)):
-    # save upload to temp file
+    # save and preprocess upload
     suffix = Path(image.filename).suffix or '.jpg'
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp_path = Path(tmp.name)
-        shutil.copyfileobj(image.file, tmp)
+        # Convert to RGB while saving
+        from PIL import Image
+        img = Image.open(image.file)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        img.save(tmp_path, format='JPEG', quality=95)
     try:
         model = get_model()
     except Exception as e:
@@ -99,14 +104,21 @@ async def infer(image: UploadFile = File(...)):
     try:
         # Run prediction with configured thresholds
         print(f"DEBUG: predict(imgsz={IMG_SIZE}, conf={CONF_THRESHOLD}, iou={IOU_THRESHOLD}, max_det={MAX_DET})")
+        
+        # Check image before prediction
+        from PIL import Image
+        img = Image.open(tmp_path)
+        print(f"DEBUG: Input image size: {img.size}, mode: {img.mode}")
+        
         results = model.predict(
             source=str(tmp_path),
             imgsz=IMG_SIZE,
             conf=CONF_THRESHOLD,
             iou=IOU_THRESHOLD,
             max_det=MAX_DET,
-            verbose=False,
-            device='cpu'
+            verbose=True,  # Enable verbose output
+            device='cpu',
+            task='detect'  # Force detection task
         )
         # results is a list-like; take first
         r = results[0]
