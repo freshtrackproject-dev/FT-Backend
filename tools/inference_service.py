@@ -118,8 +118,18 @@ async def infer(image: UploadFile = File(...)):
             max_det=MAX_DET,
             verbose=True,  # Enable verbose output
             device='cpu',
-            task='detect'  # Force detection task
+            task='detect',  # Force detection task
+            retina_masks=True,
+            save=False,
+            save_txt=False
         )
+        print(f"DEBUG: Raw results: {results}")
+        print(f"DEBUG: Results type: {type(results)}")
+        if len(results):
+            print(f"DEBUG: First result keys: {dir(results[0])}")
+            print(f"DEBUG: First result boxes keys: {dir(results[0].boxes) if hasattr(results[0], 'boxes') else 'No boxes'}")
+            if hasattr(results[0], 'boxes'):
+                print(f"DEBUG: Boxes count: {len(results[0].boxes)}")
         # results is a list-like; take first
         r = results[0]
         # Boxes: try to access normalized x,y,w,h if available; else compute from xyxy
@@ -151,19 +161,41 @@ async def infer(image: UploadFile = File(...)):
 
         print(f"DEBUG: Found {len(boxes)} boxes before extraction")
 
-        # Extract arrays
+        # Access raw tensors directly for debugging
+        print(f"DEBUG: Accessing raw result attributes...")
+        print(f"DEBUG: Result boxes available: {hasattr(r, 'boxes')}")
+        if hasattr(r, 'boxes'):
+            print(f"DEBUG: Boxes attributes: {dir(r.boxes)}")
+            print(f"DEBUG: Raw tensors:")
+            if hasattr(r.boxes, 'xyxy'):
+                print(f"  xyxy: {r.boxes.xyxy}")
+            if hasattr(r.boxes, 'conf'):
+                print(f"  conf: {r.boxes.conf}")
+            if hasattr(r.boxes, 'cls'):
+                print(f"  cls: {r.boxes.cls}")
+        
+        # Extract arrays with detailed debugging
+        print("DEBUG: Attempting to extract normalized coordinates...")
         try:
-            xywhn = boxes.xywhn.cpu().numpy()  # normalized cx,cy,w,h
-            confs = boxes.conf.cpu().numpy()
-            clss = boxes.cls.cpu().numpy().astype(int)
-        except Exception:
-            # fallback: compute from xyxy
-            try:
+            if hasattr(boxes, 'xywhn'):
+                print("DEBUG: Found xywhn format")
+                xywhn = boxes.xywhn.cpu().numpy()
+                confs = boxes.conf.cpu().numpy()
+                clss = boxes.cls.cpu().numpy().astype(int)
+            elif hasattr(boxes, 'xyxy'):
+                print("DEBUG: Found xyxy format, converting to normalized")
                 xyxy = boxes.xyxy.cpu().numpy()
                 confs = boxes.conf.cpu().numpy()
                 clss = boxes.cls.cpu().numpy().astype(int)
-                # convert xyxy to normalized xywhn using image size
+                print(f"DEBUG: xyxy shape: {xyxy.shape}, values: {xyxy}")
+                print(f"DEBUG: confs shape: {confs.shape}, values: {confs}")
+                print(f"DEBUG: clss shape: {clss.shape}, values: {clss}")
+                
+                # Get image dimensions
                 h, w = r.orig_shape[:2]
+                print(f"DEBUG: Image dimensions: {w}x{h}")
+                
+                # Convert to normalized coordinates
                 xywhn = []
                 for x1,y1,x2,y2 in xyxy:
                     cx = (x1 + x2) / 2.0 / w
@@ -173,6 +205,14 @@ async def infer(image: UploadFile = File(...)):
                     xywhn.append([cx, cy, ww, hh])
                 import numpy as _np
                 xywhn = _np.array(xywhn)
+                print(f"DEBUG: Converted to normalized: {xywhn.shape}, values: {xywhn}")
+            else:
+                print("DEBUG: No recognized coordinate format found")
+                print(f"DEBUG: Available attributes: {dir(boxes)}")
+                raise ValueError("No recognized coordinate format in boxes object")
+        except Exception as e:
+            print(f"DEBUG: Error extracting coordinates: {str(e)}")
+            raise
             except Exception:
                 # last fallback: empty
                 xywhn = []
