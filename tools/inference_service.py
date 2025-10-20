@@ -79,8 +79,8 @@ async def infer(image: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
     try:
-        # Run prediction
-        results = model.predict(source=str(tmp_path), imgsz=IMG_SIZE, conf=CONF_THRESHOLD)
+        # Run prediction with lower confidence threshold for better recall
+        results = model.predict(source=str(tmp_path), imgsz=IMG_SIZE, conf=CONF_THRESHOLD, verbose=False)
         # results is a list-like; take first
         r = results[0]
         # Boxes: try to access normalized x,y,w,h if available; else compute from xyxy
@@ -95,7 +95,10 @@ async def infer(image: UploadFile = File(...)):
         boxes = getattr(r, 'boxes', None)
         if boxes is None:
             # no detections
+            print(f"DEBUG: No boxes found in result")
             return JSONResponse({'success': True, 'detections': []})
+
+        print(f"DEBUG: Found {len(boxes)} boxes before filtering")
 
         # Extract arrays
         try:
@@ -140,6 +143,7 @@ async def infer(image: UploadFile = File(...)):
                 'label': label,
             })
 
+        print(f"DEBUG: Returning {len(dets)} detections")
         # Return detections; Node server will attach storage data if needed
         return JSONResponse({'success': True, 'detections': dets})
     except Exception as e:
