@@ -24,8 +24,10 @@ import os
 app = FastAPI(title="PyTorch Inference Service")
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
-IMG_SIZE = 640
-CONF_THRESHOLD = 0.15
+IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
+CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.10'))
+IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.5'))
+MAX_DET = int(os.getenv('MAX_DET', '100'))
 
 # Lazy load model
 _model = None
@@ -79,8 +81,17 @@ async def infer(image: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
     try:
-        # Run prediction with lower confidence threshold for better recall
-        results = model.predict(source=str(tmp_path), imgsz=IMG_SIZE, conf=CONF_THRESHOLD, verbose=False)
+        # Run prediction with configured thresholds
+        print(f"DEBUG: predict(imgsz={IMG_SIZE}, conf={CONF_THRESHOLD}, iou={IOU_THRESHOLD}, max_det={MAX_DET})")
+        results = model.predict(
+            source=str(tmp_path),
+            imgsz=IMG_SIZE,
+            conf=CONF_THRESHOLD,
+            iou=IOU_THRESHOLD,
+            max_det=MAX_DET,
+            verbose=False,
+            device='cpu'
+        )
         # results is a list-like; take first
         r = results[0]
         # Boxes: try to access normalized x,y,w,h if available; else compute from xyxy
@@ -93,12 +104,12 @@ async def infer(image: UploadFile = File(...)):
 
         # r.boxes has attributes: xyxy, xywhn, conf, cls
         boxes = getattr(r, 'boxes', None)
-        if boxes is None:
+        if boxes is None or (hasattr(boxes, '__len__') and len(boxes) == 0):
             # no detections
             print(f"DEBUG: No boxes found in result")
             return JSONResponse({'success': True, 'detections': []})
 
-        print(f"DEBUG: Found {len(boxes)} boxes before filtering")
+        print(f"DEBUG: Found {len(boxes)} boxes before extraction")
 
         # Extract arrays
         try:
