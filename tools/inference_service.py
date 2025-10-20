@@ -45,9 +45,23 @@ def get_model():
             raise RuntimeError('ultralytics package not installed')
         if not MODEL_PATH.exists():
             raise FileNotFoundError(f'Model file not found: {MODEL_PATH}')
-        _model = YOLO(str(MODEL_PATH))
+        print(f"DEBUG: Loading model from {MODEL_PATH}")
+        try:
+            _model = YOLO(str(MODEL_PATH))
+            print(f"DEBUG: Model loaded successfully: {type(_model)}")
+            print(f"DEBUG: Model task: {getattr(_model, 'task', 'unknown')}")
+            print(f"DEBUG: Model names: {getattr(_model, 'names', {})}")
+        except Exception as e:
+            print(f"DEBUG: Error loading model: {str(e)}")
+            raise
     return _model
 
+
+# Root endpoint
+@app.get('/')
+async def root():
+    """API root endpoint."""
+    return {"message": "FreshTrack Inference API", "docs": "/docs"}
 
 # Add HEAD support to health endpoint
 @app.get('/health', include_in_schema=True)

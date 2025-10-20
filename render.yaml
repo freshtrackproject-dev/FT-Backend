@@ -45,7 +45,7 @@ services:
       - key: PORT
         value: 8001
       - key: CONF_THRESHOLD
-        value: 0.25
+        value: 0.15
       - key: IOU_THRESHOLD
         value: 0.5
       - key: MAX_DET
