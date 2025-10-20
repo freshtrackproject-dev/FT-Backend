@@ -25,7 +25,7 @@ app = FastAPI(title="PyTorch Inference Service")
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
-CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.15'))
+CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.25'))  # Adjust from 0.15 to 0.25
 IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.5'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
@@ -49,7 +49,9 @@ def get_model():
     return _model
 
 
-@app.get('/health')
+# Add HEAD support to health endpoint
+@app.get('/health', include_in_schema=True)
+@app.head('/health', include_in_schema=True)
 async def health():
     """Simple health endpoint used by Render or orchestrators.
 
@@ -176,6 +178,12 @@ async def infer(image: UploadFile = File(...)):
             os.unlink(tmp_path)
         except Exception:
             pass
+
+
+# Add root endpoint redirect to docs
+@app.get("/")
+async def root():
+    return {"message": "API docs at /docs"}
 
 
 if __name__ == '__main__':

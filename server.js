@@ -1,4 +1,3 @@
-
 const express = require('express');
 const app = express();
 
@@ -6,6 +5,17 @@ const app = express();
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'node-backend', time: new Date().toISOString() });
 });
+
+// Add HEAD support to health endpoint
+app.head('/api/health', (req, res) => {
+  res.json({ status: 'ok', service: 'node-backend', time: new Date().toISOString() });
+});
+
+// Add root endpoint
+app.get('/', (req, res) => {
+  res.json({ message: 'FreshTrack Backend API' });
+});
+
 const cors = require('cors');
 const multer = require('multer');
 const helmet = require('helmet');
