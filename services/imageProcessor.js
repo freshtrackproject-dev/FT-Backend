@@ -6,8 +6,9 @@ const { getStorageData } = require("../services/storageService");
 // Forward inference to a Python service (Ultralytics) by default
 const INFERENCE_URL = process.env.INFERENCE_URL || 'http://localhost:8001/infer';
 
-// Use Node.js http module and form-data for multipart
+// Use Node.js http(s) module and form-data for multipart
 const http = require('http');
+const https = require('https');
 const FormDataImpl = require('form-data');
 
 // Path and constants
@@ -66,15 +67,17 @@ class ImageProcessor {
 
       // Parse the INFERENCE_URL to get hostname and port
       const inferenceUrl = new URL(INFERENCE_URL);
+      const isHttps = inferenceUrl.protocol === 'https:';
       const options = {
         hostname: inferenceUrl.hostname,
-        port: inferenceUrl.port || 8001,
+        port: inferenceUrl.port || (isHttps ? 443 : 8001),
         path: inferenceUrl.pathname,
         method: 'POST',
         headers: form.getHeaders()
       };
 
-      const req = http.request(options, (res) => {
+      const client = isHttps ? https : http;
+      const req = client.request(options, (res) => {
         let data = '';
         res.on('data', (chunk) => {
           data += chunk;
