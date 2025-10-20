@@ -34,6 +34,30 @@ services:
     region: singapore
     autoDeploy: true
 
+    # Docker setup for Python service
+    dockerfilePath: ./Dockerfile.python
+    dockerCommand: /app/tools/download_and_run.sh
+
+    # Environment variables for Python service
+    envVars:
+      - key: MODEL_URL
+        value: https://raw.githubusercontent.com/101star101/freshtrack-backend/main/models/best.pt
+      - key: PORT
+        value: 8001
+      - key: CONF_THRESHOLD
+        value: 0.25
+      - key: IOU_THRESHOLD
+        value: 0.5
+      - key: MAX_DET
+        value: 100
+
+    healthCheckPath: /health
+    name: freshtrack-backend-1
+    env: docker
+    plan: free
+    region: singapore
+    autoDeploy: true
+
     # Docker setup for Python inference service
     dockerfilePath: ./Dockerfile.python
     dockerCommand: uvicorn tools.inference_service:app --host 0.0.0.0 --port 8001
