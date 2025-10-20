@@ -1,22 +1,33 @@
 """
-Minimal FastAPI inference service for Ultralytics PyTorch models (.pt).
+Minimal FastAPI inference service for Ultralytics YOLO OBB model.
 
-Usage:
-1. Install dependencies:
-   py -m pip install fastapi uvicorn python-multipart pillow ultralytics
+This service:
+1. Accepts images via POST /infer endpoint
+2. Runs YOLO OBB detection
+3. Returns normalized bounding boxes in the format expected by the frontend
 
-2. Run the service:
-   py -m uvicorn tools.inference_service:app --host 0.0.0.0 --port 8001
+Format:
+{
+    "success": true,
+    "detections": [
+        {
+            "label": str,
+            "confidence": float,
+            "bbox": {
+                "x": float,  # normalized top-left x
+                "y": float,  # normalized top-left y
+                "width": float,
+                "height": float
+            }
+        }
+    ]
+}
 
-3. POST an image to /infer as form-data with key 'image'.
-   The response JSON matches the Node backend shape: { success: true, detections: [...] }
-
-Note: This service uses the Ultralytics YOLO API to load and run the model. It expects 'models/best.pt' by default.
+Dependencies: fastapi uvicorn python-multipart pillow ultralytics
 """
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from pathlib import Path
-import shutil
 import tempfile
 import uvicorn
 import os
@@ -26,7 +37,7 @@ app = FastAPI(title="PyTorch Inference Service")
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
-CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.25'))  # Adjust from 0.15 to 0.25
+CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.25'))
 IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.5'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
@@ -35,303 +46,149 @@ _model = None
 
 try:
     from ultralytics import YOLO
-except Exception:
+except ImportError:
     YOLO = None
 
-
 def get_model():
+    """Initialize and return the YOLO model with configured parameters."""
     global _model
     if _model is None:
         if YOLO is None:
             raise RuntimeError('ultralytics package not installed')
         if not MODEL_PATH.exists():
             raise FileNotFoundError(f'Model file not found: {MODEL_PATH}')
+        
         print(f"DEBUG: Loading model from {MODEL_PATH}")
         try:
             _model = YOLO(str(MODEL_PATH))
-            # Force detect task mode regardless of model type
-            _model.overrides['task'] = 'detect'
             print(f"DEBUG: Model loaded successfully: {type(_model)}")
             print(f"DEBUG: Model task: {getattr(_model, 'task', 'unknown')}")
             print(f"DEBUG: Model names: {getattr(_model, 'names', {})}")
+            
+            # Configure inference parameters
+            _model.overrides = {
+                'conf': CONF_THRESHOLD,
+                'iou': IOU_THRESHOLD,
+                'max_det': MAX_DET,
+                'verbose': True
+            }
         except Exception as e:
             print(f"DEBUG: Error loading model: {str(e)}")
             raise
     return _model
 
-
-# Root endpoint
 @app.get('/')
 async def root():
     """API root endpoint."""
     return {"message": "FreshTrack Inference API", "docs": "/docs"}
 
-# Add HEAD support to health endpoint
 @app.get('/health', include_in_schema=True)
 @app.head('/health', include_in_schema=True)
 async def health():
-    """Simple health endpoint used by Render or orchestrators.
-
-    Returns service status and whether the model is loadable.
-    """
-    model_ok = True
-    reason = None
+    """Health check endpoint."""
     try:
-        # Attempt to lazy-load the model without raising an exception to the caller
         _ = get_model()
+        return JSONResponse({
+            'status': 'ok',
+            'model_loaded': True
+        })
     except Exception as e:
-        model_ok = False
-        reason = str(e)
-
-    return JSONResponse({'status': 'ok' if model_ok else 'error', 'model_loaded': model_ok, 'detail': reason})
-
+        return JSONResponse({
+            'status': 'error',
+            'model_loaded': False,
+            'detail': str(e)
+        })
 
 @app.post('/infer')
 async def infer(image: UploadFile = File(...)):
-    # save and preprocess upload
-    suffix = Path(image.filename).suffix or '.jpg'
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp_path = Path(tmp.name)
-        # Convert to RGB while saving
-        from PIL import Image
-        img = Image.open(image.file)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        img.save(tmp_path, format='JPEG', quality=95)
+    """Process an image and return detections in the frontend-expected format."""
+    tmp_path = None
     try:
-        model = get_model()
-    except Exception as e:
-        os.unlink(tmp_path)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Save and preprocess uploaded image
+        suffix = Path(image.filename).suffix or '.jpg'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = Path(tmp.name)
+            from PIL import Image
+            img = Image.open(image.file)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img.save(tmp_path, format='JPEG', quality=95)
 
-    try:
-        # Run prediction with configured thresholds
-        print(f"DEBUG: predict(imgsz={IMG_SIZE}, conf={CONF_THRESHOLD}, iou={IOU_THRESHOLD}, max_det={MAX_DET})")
-        
-        # Check image before prediction
-        from PIL import Image
-        img = Image.open(tmp_path)
-        print(f"DEBUG: Input image size: {img.size}, mode: {img.mode}")
-        
+        # Run inference
+        model = get_model()
         results = model.predict(
             source=str(tmp_path),
             imgsz=IMG_SIZE,
             conf=CONF_THRESHOLD,
             iou=IOU_THRESHOLD,
             max_det=MAX_DET,
-            verbose=True,  # Enable verbose output
             device='cpu',
-            task='detect',  # Force detection task
-            retina_masks=True,
-            save=False,
-            save_txt=False
+            verbose=True
         )
-        print(f"DEBUG: Raw results: {results}")
-        print(f"DEBUG: Results type: {type(results)}")
-        if len(results):
-            print(f"DEBUG: First result keys: {dir(results[0])}")
-            print(f"DEBUG: First result boxes keys: {dir(results[0].boxes) if hasattr(results[0], 'boxes') else 'No boxes'}")
-            if hasattr(results[0], 'boxes'):
-                print(f"DEBUG: Boxes count: {len(results[0].boxes)}")
-        # results is a list-like; take first
-        r = results[0]
-        # Boxes: try to access normalized x,y,w,h if available; else compute from xyxy
-        dets = []
-        names = {}
-        try:
-            names = model.names if hasattr(model, 'names') else {}
-        except Exception:
-            names = {}
 
-        # r.boxes has attributes: xyxy, xywhn, conf, cls
-        boxes = getattr(r, 'boxes', None)
-        print(f"DEBUG: boxes object: {boxes}")
-        print(f"DEBUG: boxes type: {type(boxes)}")
-        if boxes is not None:
-            print(f"DEBUG: boxes has length: {len(boxes) if hasattr(boxes, '__len__') else 'no length'}")
-            if hasattr(boxes, 'xyxy'):
-                print(f"DEBUG: boxes.xyxy shape: {boxes.xyxy.shape if hasattr(boxes.xyxy, 'shape') else 'no shape'}")
-            if hasattr(boxes, 'conf'):
-                print(f"DEBUG: boxes.conf shape: {boxes.conf.shape if hasattr(boxes.conf, 'shape') else 'no shape'}")
-                if hasattr(boxes.conf, 'cpu'):
-                    confs_cpu = boxes.conf.cpu().numpy()
-                    print(f"DEBUG: confidence values: {confs_cpu}")
-        
-        if boxes is None or (hasattr(boxes, '__len__') and len(boxes) == 0):
-            # no detections
-            print(f"DEBUG: No boxes found in result")
+        if not results:
             return JSONResponse({'success': True, 'detections': []})
 
-        print(f"DEBUG: Found {len(boxes)} boxes before extraction")
+        r = results[0]
+        detections = []
 
-        # Access raw tensors directly for debugging
-        print(f"DEBUG: Accessing raw result attributes...")
-        print(f"DEBUG: Result boxes available: {hasattr(r, 'boxes')}")
-        if hasattr(r, 'boxes'):
-            print(f"DEBUG: Boxes attributes: {dir(r.boxes)}")
-            print(f"DEBUG: Raw tensors:")
-            if hasattr(r.boxes, 'xyxy'):
-                print(f"  xyxy: {r.boxes.xyxy}")
-            if hasattr(r.boxes, 'conf'):
-                print(f"  conf: {r.boxes.conf}")
-            if hasattr(r.boxes, 'cls'):
-                print(f"  cls: {r.boxes.cls}")
-        
-        # Initialize variables for storing processed detections
-        dets = []
-        
-        print("DEBUG: Processing detection results...")
-        try:
-            if hasattr(r, 'obb') and r.obb is not None:
-                print("DEBUG: Found OBB object")
-                obb = r.obb.cpu()
-                print("DEBUG: OBB available methods:", [m for m in dir(obb) if not m.startswith('_')])
-                
-                # Get the boxes first
-                if hasattr(obb, 'cxcywha'):
-                    print("DEBUG: Using cxcywha format")
-                    cxcywha = obb.cxcywha.numpy()
-                    print(f"DEBUG: Found {len(cxcywha)} cxcywha boxes")
-                    print(f"DEBUG: Box format: {cxcywha.shape}, sample: {cxcywha[0] if len(cxcywha) > 0 else 'empty'}")
-                    
-                    # Get the class predictions and confidence scores
-                    conf = obb.conf.numpy() if hasattr(obb, 'conf') else np.ones(len(cxcywha))
-                    cls = obb.cls.numpy().astype(int) if hasattr(obb, 'cls') else np.zeros(len(cxcywha), dtype=int)
-                    
-                    # Convert oriented boxes to axis-aligned and normalize
-                    h, w = r.orig_shape[:2]
-                    for i, (cx, cy, width, height, angle) in enumerate(cxcywha):
-                        # Convert to normalized coordinates
-                        cx_norm = cx / w
-                        cy_norm = cy / h
-                        w_norm = width / w
-                        h_norm = height / h
+        # Process OBB detections
+        if hasattr(r, 'obb') and r.obb is not None:
+            obb = r.obb.cpu()
+            if hasattr(obb, 'data'):
+                box_data = obb.data.numpy()
+                if len(box_data) > 0:
+                    # Process each detection
+                    for i in range(len(box_data)):
+                        cx, cy, w, h = box_data[i][:4]  # center-x, center-y, width, height
+                        conf = float(box_data[i][5])    # confidence score
+                        cls_id = int(box_data[i][6])    # class ID
                         
-                        # Bound check
-                        cx_norm = max(0.0, min(1.0, cx_norm))
-                        cy_norm = max(0.0, min(1.0, cy_norm))
-                        w_norm = max(0.0, min(1.0, w_norm))
-                        h_norm = max(0.0, min(1.0, h_norm))
-                        
-                        # Create detection entry
-                        label = names.get(cls[i], f'cls_{cls[i]}') if isinstance(names, dict) else str(cls[i])
-                        dets.append({
-                            'x': float(cx_norm),
-                            'y': float(cy_norm),
-                            'width': float(w_norm),
-                            'height': float(h_norm),
-                            'confidence': float(conf[i]),
-                            'class_id': int(cls[i]),
-                            'label': label
+                        # Normalize coordinates if needed
+                        if cx > 1 or cy > 1:
+                            h, w = r.orig_shape
+                            cx = cx / w
+                            cy = cy / h
+                            w = w / w
+                            h = h / h
+
+                        # Ensure values are in [0,1]
+                        cx = float(max(0.0, min(1.0, cx)))
+                        cy = float(max(0.0, min(1.0, cy)))
+                        w = float(max(0.0, min(1.0, w)))
+                        h = float(max(0.0, min(1.0, h)))
+
+                        # Convert center coordinates to top-left for frontend
+                        x = cx - w/2
+                        y = cy - h/2
+
+                        # Get class label
+                        label = model.names.get(cls_id, f'class_{cls_id}')
+
+                        detections.append({
+                            'label': label,
+                            'confidence': conf,
+                            'bbox': {
+                                'x': float(max(0.0, min(1.0, x))),
+                                'y': float(max(0.0, min(1.0, y))),
+                                'width': float(w),
+                                'height': float(h)
+                            }
                         })
-                    print(f"DEBUG: Processed {len(dets)} detections")
-                    return JSONResponse({'success': True, 'detections': dets})
-                    elif hasattr(obb, 'xywh'):
-                        print("DEBUG: Using xywh format")
-                        xywh = obb.xywh.numpy()
-                        xyxy = []
-                        for x, y, w, h in xywh:
-                            x1 = x - w/2
-                            y1 = y - h/2
-                            x2 = x + w/2
-                            y2 = y + h/2
-                            xyxy.append([x1, y1, x2, y2])
-                        xyxy = np.array(xyxy)
-                    elif hasattr(obb, 'xyxy'):
-                        print("DEBUG: Using xyxy format directly")
-                        xyxy = obb.xyxy.numpy()
-                    else:
-                        print("DEBUG: Available formats:", dir(obb))
-                        raise ValueError("No recognized coordinate format in OBB")
-                    
-                    # Get confidence scores
-                    if hasattr(obb, 'conf'):
-                        confs = obb.conf.numpy()
-                        print(f"DEBUG: Found {len(confs)} confidence scores")
-                    else:
-                        print("DEBUG: No confidence scores, using default 1.0")
-                        confs = np.ones(len(xyxy))
-                    
-                    # Get class indices
-                    if hasattr(obb, 'cls'):
-                        clss = obb.cls.numpy().astype(int)
-                        print(f"DEBUG: Found {len(clss)} class indices")
-                    else:
-                        print("DEBUG: No class indices, using default 0")
-                        clss = np.zeros(len(xyxy), dtype=int)
-                    
-                    print(f"DEBUG: Final arrays - boxes: {xyxy.shape}, conf: {confs.shape}, cls: {clss.shape}")
-                    
-                except Exception as e:
-                    print(f"DEBUG: Error processing OBB: {str(e)}")
-                    raise
-                
-            elif hasattr(r, 'boxes') and r.boxes is not None:
-                print("DEBUG: Using regular detection boxes")
-                boxes = r.boxes.cpu()
-                xyxy = boxes.xyxy.numpy()
-                confs = boxes.conf.numpy()
-                clss = boxes.cls.numpy().astype(int)
-            else:
-                print("DEBUG: No detection boxes found in results")
-                return JSONResponse({'success': True, 'detections': []})
 
-            print(f"DEBUG: xyxy shape: {xyxy.shape}, values: {xyxy}")
-            print(f"DEBUG: confs shape: {confs.shape}, values: {confs}")
-            print(f"DEBUG: clss shape: {clss.shape}, values: {clss}")
-            
-            # Get image dimensions
-            h, w = r.orig_shape[:2]
-            print(f"DEBUG: Image dimensions: {w}x{h}")
-            
-            # Convert to normalized coordinates
-            xywhn = []
-            for x1,y1,x2,y2 in xyxy:
-                cx = (x1 + x2) / 2.0 / w
-                cy = (y1 + y2) / 2.0 / h
-                ww = (x2 - x1) / w
-                hh = (y2 - y1) / h
-                xywhn.append([cx, cy, ww, hh])
-            
-            import numpy as _np
-            xywhn = _np.array(xywhn)
-            print(f"DEBUG: Converted to normalized: {xywhn.shape}, values: {xywhn}")
-        except Exception as e:
-            print(f"DEBUG: Error extracting coordinates: {str(e)}")
-            print("DEBUG: Falling back to empty detections")
-
-        for i in range(len(xywhn)):
-            cx, cy, ww, hh = xywhn[i]
-            conf = float(confs[i]) if i < len(confs) else 0.0
-            cls = int(clss[i]) if i < len(clss) else -1
-            label = names.get(cls, f'cls_{cls}') if isinstance(names, dict) else str(cls)
-            dets.append({
-                'x': float(cx),
-                'y': float(cy),
-                'width': float(ww),
-                'height': float(hh),
-                'confidence': float(conf),
-                'class_id': int(cls),
-                'label': label,
-            })
-
-        print(f"DEBUG: Returning {len(dets)} detections")
-        # Return detections; Node server will attach storage data if needed
-        return JSONResponse({'success': True, 'detections': dets})
+        return JSONResponse({'success': True, 'detections': detections})
+    
     except Exception as e:
+        print(f"DEBUG: Error during inference: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
     finally:
-        try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
-
-
-# Add root endpoint redirect to docs
-@app.get("/")
-async def root():
-    return {"message": "API docs at /docs"}
-
+        # Clean up temporary file
+        if tmp_path:
+            try:
+                tmp_path.unlink()
+            except:
+                pass
 
 if __name__ == '__main__':
     uvicorn.run('tools.inference_service:app', host='0.0.0.0', port=8001, reload=False)
