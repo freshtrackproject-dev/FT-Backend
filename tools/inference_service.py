@@ -25,7 +25,7 @@ app = FastAPI(title="PyTorch Inference Service")
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
-CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.10'))
+CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.15'))
 IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.5'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
@@ -104,6 +104,18 @@ async def infer(image: UploadFile = File(...)):
 
         # r.boxes has attributes: xyxy, xywhn, conf, cls
         boxes = getattr(r, 'boxes', None)
+        print(f"DEBUG: boxes object: {boxes}")
+        print(f"DEBUG: boxes type: {type(boxes)}")
+        if boxes is not None:
+            print(f"DEBUG: boxes has length: {len(boxes) if hasattr(boxes, '__len__') else 'no length'}")
+            if hasattr(boxes, 'xyxy'):
+                print(f"DEBUG: boxes.xyxy shape: {boxes.xyxy.shape if hasattr(boxes.xyxy, 'shape') else 'no shape'}")
+            if hasattr(boxes, 'conf'):
+                print(f"DEBUG: boxes.conf shape: {boxes.conf.shape if hasattr(boxes.conf, 'shape') else 'no shape'}")
+                if hasattr(boxes.conf, 'cpu'):
+                    confs_cpu = boxes.conf.cpu().numpy()
+                    print(f"DEBUG: confidence values: {confs_cpu}")
+        
         if boxes is None or (hasattr(boxes, '__len__') and len(boxes) == 0):
             # no detections
             print(f"DEBUG: No boxes found in result")
