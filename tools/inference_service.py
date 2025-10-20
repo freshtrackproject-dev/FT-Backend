@@ -174,6 +174,11 @@ async def infer(image: UploadFile = File(...)):
             if hasattr(r.boxes, 'cls'):
                 print(f"  cls: {r.boxes.cls}")
         
+        # Initialize variables
+        xywhn = []
+        confs = []
+        clss = []
+        
         # Extract arrays with detailed debugging
         print("DEBUG: Attempting to extract normalized coordinates...")
         try:
@@ -212,10 +217,7 @@ async def infer(image: UploadFile = File(...)):
                 raise ValueError("No recognized coordinate format in boxes object")
         except Exception as e:
             print(f"DEBUG: Error extracting coordinates: {str(e)}")
-            # last fallback: empty
-            xywhn = []
-            confs = []
-            clss = []
+            print("DEBUG: Falling back to empty detections")
 
         for i in range(len(xywhn)):
             cx, cy, ww, hh = xywhn[i]
