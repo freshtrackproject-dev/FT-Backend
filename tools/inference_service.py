@@ -177,54 +177,94 @@ async def infer(image: UploadFile = File(...)):
             if hasattr(r.boxes, 'cls'):
                 print(f"  cls: {r.boxes.cls}")
         
-        # Initialize variables
-        xywhn = []
-        confs = []
-        clss = []
+        # Initialize variables for storing processed detections
+        dets = []
         
-        # Extract arrays with detailed debugging
-        print("DEBUG: Attempting to extract normalized coordinates...")
+        print("DEBUG: Processing detection results...")
         try:
-            print("DEBUG: Checking OBB attributes...")
             if hasattr(r, 'obb') and r.obb is not None:
-                print("DEBUG: Found OBB object:", r.obb)
-                print("DEBUG: OBB attributes:", dir(r.obb))
-                boxes = r.obb.cpu()
-                print("DEBUG: OBB boxes attributes:", dir(boxes))
+                print("DEBUG: Found OBB object")
+                obb = r.obb.cpu()
+                print("DEBUG: OBB available methods:", [m for m in dir(obb) if not m.startswith('_')])
                 
-                # Try to get boxes in the right format
-                if hasattr(boxes, 'xyxy'):
-                    print("DEBUG: Using OBB xyxy format")
-                    xyxy = boxes.xyxy.numpy()
-                elif hasattr(boxes, 'xywh'):
-                    print("DEBUG: Converting OBB xywh to xyxy format")
-                    xywh = boxes.xywh.numpy()
-                    # Convert xywh to xyxy
-                    xyxy = []
-                    for x, y, w, h in xywh:
-                        x1 = x - w/2
-                        y1 = y - h/2
-                        x2 = x + w/2
-                        y2 = y + h/2
-                        xyxy.append([x1, y1, x2, y2])
-                    xyxy = np.array(xyxy)
-                else:
-                    print("DEBUG: No recognized box format in OBB")
-                    print("DEBUG: Available OBB box attributes:", dir(boxes))
-                    raise ValueError("No recognized box format in OBB object")
-                
-                # Get confidence and class
-                if hasattr(boxes, 'conf'):
-                    confs = boxes.conf.numpy()
-                else:
-                    print("DEBUG: No confidence scores found")
-                    confs = np.ones(len(xyxy))
-                
-                if hasattr(boxes, 'cls'):
-                    clss = boxes.cls.numpy().astype(int)
-                else:
-                    print("DEBUG: No class indices found")
-                    clss = np.zeros(len(xyxy), dtype=int)
+                # Get the boxes first
+                if hasattr(obb, 'cxcywha'):
+                    print("DEBUG: Using cxcywha format")
+                    cxcywha = obb.cxcywha.numpy()
+                    print(f"DEBUG: Found {len(cxcywha)} cxcywha boxes")
+                    print(f"DEBUG: Box format: {cxcywha.shape}, sample: {cxcywha[0] if len(cxcywha) > 0 else 'empty'}")
+                    
+                    # Get the class predictions and confidence scores
+                    conf = obb.conf.numpy() if hasattr(obb, 'conf') else np.ones(len(cxcywha))
+                    cls = obb.cls.numpy().astype(int) if hasattr(obb, 'cls') else np.zeros(len(cxcywha), dtype=int)
+                    
+                    # Convert oriented boxes to axis-aligned and normalize
+                    h, w = r.orig_shape[:2]
+                    for i, (cx, cy, width, height, angle) in enumerate(cxcywha):
+                        # Convert to normalized coordinates
+                        cx_norm = cx / w
+                        cy_norm = cy / h
+                        w_norm = width / w
+                        h_norm = height / h
+                        
+                        # Bound check
+                        cx_norm = max(0.0, min(1.0, cx_norm))
+                        cy_norm = max(0.0, min(1.0, cy_norm))
+                        w_norm = max(0.0, min(1.0, w_norm))
+                        h_norm = max(0.0, min(1.0, h_norm))
+                        
+                        # Create detection entry
+                        label = names.get(cls[i], f'cls_{cls[i]}') if isinstance(names, dict) else str(cls[i])
+                        dets.append({
+                            'x': float(cx_norm),
+                            'y': float(cy_norm),
+                            'width': float(w_norm),
+                            'height': float(h_norm),
+                            'confidence': float(conf[i]),
+                            'class_id': int(cls[i]),
+                            'label': label
+                        })
+                    print(f"DEBUG: Processed {len(dets)} detections")
+                    return JSONResponse({'success': True, 'detections': dets})
+                    elif hasattr(obb, 'xywh'):
+                        print("DEBUG: Using xywh format")
+                        xywh = obb.xywh.numpy()
+                        xyxy = []
+                        for x, y, w, h in xywh:
+                            x1 = x - w/2
+                            y1 = y - h/2
+                            x2 = x + w/2
+                            y2 = y + h/2
+                            xyxy.append([x1, y1, x2, y2])
+                        xyxy = np.array(xyxy)
+                    elif hasattr(obb, 'xyxy'):
+                        print("DEBUG: Using xyxy format directly")
+                        xyxy = obb.xyxy.numpy()
+                    else:
+                        print("DEBUG: Available formats:", dir(obb))
+                        raise ValueError("No recognized coordinate format in OBB")
+                    
+                    # Get confidence scores
+                    if hasattr(obb, 'conf'):
+                        confs = obb.conf.numpy()
+                        print(f"DEBUG: Found {len(confs)} confidence scores")
+                    else:
+                        print("DEBUG: No confidence scores, using default 1.0")
+                        confs = np.ones(len(xyxy))
+                    
+                    # Get class indices
+                    if hasattr(obb, 'cls'):
+                        clss = obb.cls.numpy().astype(int)
+                        print(f"DEBUG: Found {len(clss)} class indices")
+                    else:
+                        print("DEBUG: No class indices, using default 0")
+                        clss = np.zeros(len(xyxy), dtype=int)
+                    
+                    print(f"DEBUG: Final arrays - boxes: {xyxy.shape}, conf: {confs.shape}, cls: {clss.shape}")
+                    
+                except Exception as e:
+                    print(f"DEBUG: Error processing OBB: {str(e)}")
+                    raise
                 
             elif hasattr(r, 'boxes') and r.boxes is not None:
                 print("DEBUG: Using regular detection boxes")
