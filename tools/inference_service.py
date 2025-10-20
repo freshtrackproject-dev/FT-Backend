@@ -24,8 +24,8 @@ import os
 app = FastAPI(title="PyTorch Inference Service")
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
-IMG_SIZE = 416
-CONF_THRESHOLD = 0.25
+IMG_SIZE = 640
+CONF_THRESHOLD = 0.15
 
 # Lazy load model
 _model = None

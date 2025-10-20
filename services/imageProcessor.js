@@ -90,16 +90,27 @@ class ImageProcessor {
             const json = JSON.parse(data);
             // Expect json.detections as array of {x,y,width,height,confidence,class_id,label}
             // Map to internal postprocess-like detections with storage_info
-            const detections = (json.detections || []).map((d) => ({
-              x: d.x,
-              y: d.y,
-              width: d.width,
-              height: d.height,
-              confidence: d.confidence,
-              class_id: d.class_id,
-              label: d.label,
-              storage_info: getStorageData(d.label) || null,
-            }));
+            const detections = (json.detections || []).map((d) => {
+              // Normalize label for storage lookup (e.g., Fresh_Apples -> Fresh_Apple, Rotten_Bananas -> Rotten_Banana)
+              let normalizedLabel = d.label;
+              if (
+                typeof normalizedLabel === 'string' &&
+                (normalizedLabel.startsWith('Fresh_') || normalizedLabel.startsWith('Rotten_')) &&
+                normalizedLabel.endsWith('s')
+              ) {
+                normalizedLabel = normalizedLabel.slice(0, -1);
+              }
+              return {
+                x: d.x,
+                y: d.y,
+                width: d.width,
+                height: d.height,
+                confidence: d.confidence,
+                class_id: d.class_id,
+                label: normalizedLabel,
+                storage_info: getStorageData(normalizedLabel) || null,
+              };
+            });
             resolve(detections);
           } catch (error) {
             reject(error);
