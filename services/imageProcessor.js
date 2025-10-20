@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { URL } = require("url");
 const { getStorageData } = require("../services/storageService");
 
 // Forward inference to a Python service (Ultralytics) by default
@@ -63,10 +64,12 @@ class ImageProcessor {
       const fileStream = fs.createReadStream(imagePath);
       form.append('image', fileStream, { filename: path.basename(imagePath) });
 
+      // Parse the INFERENCE_URL to get hostname and port
+      const inferenceUrl = new URL(INFERENCE_URL);
       const options = {
-        hostname: 'inference',
-        port: 8001,
-        path: '/infer',
+        hostname: inferenceUrl.hostname,
+        port: inferenceUrl.port || 8001,
+        path: inferenceUrl.pathname,
         method: 'POST',
         headers: form.getHeaders()
       };
