@@ -7,9 +7,18 @@ set -euo pipefail
 MODELPATH=/app/models/best.pt
 mkdir -p /app/models
 
+echo "Checking for model file at $MODELPATH..."
+echo "Current directory: $(pwd)"
+echo "Contents of /app:"
+ls -la /app/
+echo "Contents of /app/models:"
+ls -la /app/models/ || echo "No models directory"
+
 if [ -f "$MODELPATH" ]; then
   echo "Model already present at $MODELPATH"
+  echo "Model file size: $(stat -c%s "$MODELPATH" 2>/dev/null || echo "unknown") bytes"
 else
+  echo "Model file not found at $MODELPATH"
   if [ -z "${MODEL_URL-}" ]; then
     echo "ERROR: MODEL_URL is not set and $MODELPATH is missing" >&2
     exit 1

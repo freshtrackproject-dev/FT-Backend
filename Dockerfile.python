@@ -25,6 +25,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source
 COPY . .
 
+# Ensure model directory exists and model file is present
+RUN mkdir -p /app/models && \
+    if [ -f /app/models/best.pt ]; then \
+        echo "Model file found at /app/models/best.pt"; \
+        ls -la /app/models/; \
+    else \
+        echo "ERROR: Model file not found at /app/models/best.pt"; \
+        ls -la /app/; \
+        exit 1; \
+    fi
+
 ENV PORT=8001
 EXPOSE 8001
 
