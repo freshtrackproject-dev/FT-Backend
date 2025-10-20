@@ -48,6 +48,8 @@ def get_model():
         print(f"DEBUG: Loading model from {MODEL_PATH}")
         try:
             _model = YOLO(str(MODEL_PATH))
+            # Force detect task mode regardless of model type
+            _model.overrides['task'] = 'detect'
             print(f"DEBUG: Model loaded successfully: {type(_model)}")
             print(f"DEBUG: Model task: {getattr(_model, 'task', 'unknown')}")
             print(f"DEBUG: Model names: {getattr(_model, 'names', {})}")
@@ -182,39 +184,44 @@ async def infer(image: UploadFile = File(...)):
         # Extract arrays with detailed debugging
         print("DEBUG: Attempting to extract normalized coordinates...")
         try:
-            if hasattr(boxes, 'xywhn'):
-                print("DEBUG: Found xywhn format")
-                xywhn = boxes.xywhn.cpu().numpy()
-                confs = boxes.conf.cpu().numpy()
-                clss = boxes.cls.cpu().numpy().astype(int)
-            elif hasattr(boxes, 'xyxy'):
-                print("DEBUG: Found xyxy format, converting to normalized")
-                xyxy = boxes.xyxy.cpu().numpy()
-                confs = boxes.conf.cpu().numpy()
-                clss = boxes.cls.cpu().numpy().astype(int)
-                print(f"DEBUG: xyxy shape: {xyxy.shape}, values: {xyxy}")
-                print(f"DEBUG: confs shape: {confs.shape}, values: {confs}")
-                print(f"DEBUG: clss shape: {clss.shape}, values: {clss}")
-                
-                # Get image dimensions
-                h, w = r.orig_shape[:2]
-                print(f"DEBUG: Image dimensions: {w}x{h}")
-                
-                # Convert to normalized coordinates
-                xywhn = []
-                for x1,y1,x2,y2 in xyxy:
-                    cx = (x1 + x2) / 2.0 / w
-                    cy = (y1 + y2) / 2.0 / h
-                    ww = (x2 - x1) / w
-                    hh = (y2 - y1) / h
-                    xywhn.append([cx, cy, ww, hh])
-                import numpy as _np
-                xywhn = _np.array(xywhn)
-                print(f"DEBUG: Converted to normalized: {xywhn.shape}, values: {xywhn}")
+            # Handle either obb or regular detection boxes
+            if hasattr(r, 'obb') and r.obb is not None:
+                print("DEBUG: Found OBB format, converting to axis-aligned boxes")
+                # Get the axis-aligned bounding boxes from OBB
+                boxes = r.obb.cpu()
+                xyxy = boxes.xyxy.numpy()  # Get axis-aligned boxes
+                confs = boxes.conf.numpy()
+                clss = boxes.cls.numpy().astype(int)
+            elif hasattr(r, 'boxes') and r.boxes is not None:
+                print("DEBUG: Found regular detection boxes")
+                boxes = r.boxes.cpu()
+                xyxy = boxes.xyxy.numpy()
+                confs = boxes.conf.numpy()
+                clss = boxes.cls.numpy().astype(int)
             else:
-                print("DEBUG: No recognized coordinate format found")
-                print(f"DEBUG: Available attributes: {dir(boxes)}")
-                raise ValueError("No recognized coordinate format in boxes object")
+                print("DEBUG: No boxes found in results")
+                return JSONResponse({'success': True, 'detections': []})
+
+            print(f"DEBUG: xyxy shape: {xyxy.shape}, values: {xyxy}")
+            print(f"DEBUG: confs shape: {confs.shape}, values: {confs}")
+            print(f"DEBUG: clss shape: {clss.shape}, values: {clss}")
+            
+            # Get image dimensions
+            h, w = r.orig_shape[:2]
+            print(f"DEBUG: Image dimensions: {w}x{h}")
+            
+            # Convert to normalized coordinates
+            xywhn = []
+            for x1,y1,x2,y2 in xyxy:
+                cx = (x1 + x2) / 2.0 / w
+                cy = (y1 + y2) / 2.0 / h
+                ww = (x2 - x1) / w
+                hh = (y2 - y1) / h
+                xywhn.append([cx, cy, ww, hh])
+            
+            import numpy as _np
+            xywhn = _np.array(xywhn)
+            print(f"DEBUG: Converted to normalized: {xywhn.shape}, values: {xywhn}")
         except Exception as e:
             print(f"DEBUG: Error extracting coordinates: {str(e)}")
             print("DEBUG: Falling back to empty detections")
