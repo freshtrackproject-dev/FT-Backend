@@ -21,7 +21,7 @@ uploads/
 uploads/*
 
 # Large model files — keep if you want models baked into the image, otherwise they will be pulled at runtime
-models/*.pt
+# models/*.pt  # Commented out to include best.pt in the image
 models/*.onnx
 
 # Logs and temp
@@ -73,7 +73,7 @@ Thumbs.db
 .gitmodules
 
 # --- Model training / large data ---
-*.pt
+# *.pt  # Commented out to include best.pt in the image
 *.weights
 *.zip
 *.tar
@@ -85,3 +85,4 @@ training/
 # --- ✅ Explicitly include essential production data ---
 !data/storage_data.json
 !models/best.onnx
+!models/best.pt
