@@ -101,9 +101,34 @@ async def health():
 
 @app.post('/infer')
 async def infer(image: UploadFile = File(...)):
-    """Process an image and return detections in the frontend-expected format."""
+    """Process an image and return detections with cropped object images.
+    
+    Returns:
+        JSONResponse with format:
+        {
+            "success": true,
+            "detections": [
+                {
+                    "label": str,
+                    "confidence": float,
+                    "bbox": {
+                        "x": float,  # normalized top-left x
+                        "y": float,  # normalized top-left y
+                        "width": float,
+                        "height": float
+                    },
+                    "cropped_path": str  # path to the cropped image
+                }
+            ]
+        }
+    """
     tmp_path = None
+    crops_dir = None
     try:
+        # Create crops directory
+        crops_dir = Path('uploads/crops')
+        crops_dir.mkdir(parents=True, exist_ok=True)
+        
         # Save and preprocess uploaded image
         suffix = Path(image.filename).suffix or '.jpg'
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -113,6 +138,9 @@ async def infer(image: UploadFile = File(...)):
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             img.save(tmp_path, format='JPEG', quality=95)
+            
+        # Store original image size for later use
+        orig_width, orig_height = img.size
 
         # Run inference
         model = get_model()
@@ -164,7 +192,25 @@ async def infer(image: UploadFile = File(...)):
 
                         # Get class label
                         label = model.names.get(cls_id, f'class_{cls_id}')
-
+                        
+                        # Convert normalized coordinates back to pixels for cropping
+                        x_pixel = int(x * orig_width)
+                        y_pixel = int(y * orig_height)
+                        w_pixel = int(w * orig_width)
+                        h_pixel = int(h * orig_height)
+                        
+                        # Ensure coordinates are within bounds
+                        x_pixel = max(0, x_pixel)
+                        y_pixel = max(0, y_pixel)
+                        w_pixel = min(w_pixel, orig_width - x_pixel)
+                        h_pixel = min(h_pixel, orig_height - y_pixel)
+                        
+                        # Crop and save the detected object
+                        crop = img.crop((x_pixel, y_pixel, x_pixel + w_pixel, y_pixel + h_pixel))
+                        crop_filename = f"{label}_{i}_{conf:.2f}.jpg"
+                        crop_path = crops_dir / crop_filename
+                        crop.save(crop_path, format='JPEG', quality=95)
+                        
                         detections.append({
                             'label': label,
                             'confidence': conf,
@@ -173,7 +219,8 @@ async def infer(image: UploadFile = File(...)):
                                 'y': float(max(0.0, min(1.0, y))),
                                 'width': float(w),
                                 'height': float(h)
-                            }
+                            },
+                            'cropped_path': str(crop_path.relative_to(Path.cwd()))
                         })
 
         return JSONResponse({'success': True, 'detections': detections})
@@ -183,10 +230,22 @@ async def infer(image: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
     
     finally:
-        # Clean up temporary file
+        # Clean up temporary input file
         if tmp_path:
             try:
                 tmp_path.unlink()
+            except:
+                pass
+        
+        # Clean up old crops (keep only last 100)
+        if crops_dir and crops_dir.exists():
+            try:
+                crop_files = list(crops_dir.glob('*.jpg'))
+                crop_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                
+                # Keep only the 100 most recent crops
+                for old_crop in crop_files[100:]:
+                    old_crop.unlink()
             except:
                 pass
 

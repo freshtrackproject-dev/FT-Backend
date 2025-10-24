@@ -44,6 +44,9 @@ app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: process.env.MAX_UPLOAD_SIZE || '10mb' }));
 app.use(morgan(LOG_FORMAT));
 
+// Serve uploaded files and crops
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Increase timeout for long-running requests
 app.use((req, res, next) => {
   // Set timeout to 2 minutes
