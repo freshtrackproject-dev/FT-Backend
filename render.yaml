@@ -10,6 +10,11 @@ services:
     dockerfilePath: ./Dockerfile
     dockerCommand: node server.js
 
+    disk:
+      name: uploads
+      mountPath: /app/uploads
+      sizeGB: 1
+
     # Environment variables for Node service
     envVars:
       - key: NODE_ENV
@@ -37,6 +42,11 @@ services:
     # Docker setup for Python service
     dockerfilePath: ./Dockerfile.python
     dockerCommand: /app/tools/download_and_run.sh
+
+    disk:
+      name: uploads
+      mountPath: /app/uploads
+      sizeGB: 1
 
     # Environment variables for Python service
     envVars:

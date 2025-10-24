@@ -45,7 +45,12 @@ app.use(express.json({ limit: process.env.MAX_UPLOAD_SIZE || '10mb' }));
 app.use(morgan(LOG_FORMAT));
 
 // Serve uploaded files and crops
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static('/app/uploads'));
+// Ensure CORS is enabled for the uploads directory
+app.use('/uploads', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  next();
+});
 
 // Increase timeout for long-running requests
 app.use((req, res, next) => {
