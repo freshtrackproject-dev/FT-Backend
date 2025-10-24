@@ -125,8 +125,8 @@ async def infer(image: UploadFile = File(...)):
     tmp_path = None
     crops_dir = None
     try:
-        # Create crops directory
-        crops_dir = Path('uploads/crops')
+        # Create crops directory using absolute path
+        crops_dir = Path('/app/uploads/crops')
         crops_dir.mkdir(parents=True, exist_ok=True)
         
         # Save and preprocess uploaded image
@@ -220,7 +220,7 @@ async def infer(image: UploadFile = File(...)):
                                 'width': float(w),
                                 'height': float(h)
                             },
-                            'cropped_path': str(crop_path.relative_to(Path.cwd()))
+                            'cropped_path': f"/uploads/crops/{crop_filename}"
                         })
 
         return JSONResponse({'success': True, 'detections': detections})
