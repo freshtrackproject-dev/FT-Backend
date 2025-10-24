@@ -22,8 +22,8 @@ services:
       - key: PORT
         value: 10000
       - key: INFERENCE_URL
-        # The internal service name + port that will be reachable in the Render network
-        value: https://freshtrack-backend-1.onrender.com/infer
+        # The inference service URL
+        value: https://freshtrack-backend-inference.onrender.com/infer
       - key: STORAGE_PATH
         value: /app/data/storage_data.json
 
