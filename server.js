@@ -46,7 +46,7 @@ app.use(morgan(LOG_FORMAT));
 
 // Serve uploaded files and crops
 app.use('/uploads', (req, res, next) => {
-  console.log('Serving file from uploads:', req.url);
+  console.log('📸 Serving file from uploads:', req.url);
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -54,7 +54,30 @@ app.use('/uploads', (req, res, next) => {
     return res.sendStatus(200);
   }
   next();
-}, express.static('/app/uploads'));
+}, express.static(path.join(__dirname, 'uploads')));
+
+// Debug endpoint to check file existence
+app.get('/debug/file-exists', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) {
+    return res.status(400).json({ error: 'No file path provided' });
+  }
+  const fullPath = path.join(__dirname, filePath);
+  const exists = fs.existsSync(fullPath);
+  console.log(`🔍 Checking file existence: ${fullPath} - ${exists ? 'EXISTS' : 'NOT FOUND'}`);
+  if (exists) {
+    const stats = fs.statSync(fullPath);
+    res.json({
+      exists: true,
+      path: fullPath,
+      size: stats.size,
+      created: stats.birthtime,
+      modified: stats.mtime
+    });
+  } else {
+    res.json({ exists: false, path: fullPath });
+  }
+});
 
 // Additional route to check if files exist
 app.get('/check-file', (req, res) => {
