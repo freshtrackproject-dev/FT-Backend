@@ -20,8 +20,10 @@ RUN npm ci --omit=dev
 # Copy source files
 COPY . .
 
-# Ensure uploads and data folders exist
-RUN mkdir -p uploads data
+# Ensure uploads and data folders exist with proper permissions
+RUN mkdir -p uploads/crops data && \
+    chmod -R 777 uploads && \
+    chmod -R 777 data
 
 # ✅ Optimize for WebAssembly
 ENV NODE_OPTIONS="--no-experimental-fetch"
