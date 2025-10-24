@@ -45,11 +45,30 @@ app.use(express.json({ limit: process.env.MAX_UPLOAD_SIZE || '10mb' }));
 app.use(morgan(LOG_FORMAT));
 
 // Serve uploaded files and crops
-app.use('/uploads', express.static('/app/uploads'));
-// Ensure CORS is enabled for the uploads directory
 app.use('/uploads', (req, res, next) => {
+  console.log('Serving file from uploads:', req.url);
   res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
   next();
+}, express.static('/app/uploads'));
+
+// Additional route to check if files exist
+app.get('/check-file', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) {
+    return res.status(400).json({ error: 'No file path provided' });
+  }
+  const fullPath = path.join('/app/uploads', filePath);
+  const exists = fs.existsSync(fullPath);
+  res.json({
+    exists,
+    path: fullPath,
+    stats: exists ? fs.statSync(fullPath) : null
+  });
 });
 
 // Increase timeout for long-running requests

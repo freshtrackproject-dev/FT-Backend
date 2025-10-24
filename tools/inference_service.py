@@ -125,9 +125,12 @@ async def infer(image: UploadFile = File(...)):
     tmp_path = None
     crops_dir = None
     try:
-        # Create crops directory using absolute path
+        # Create crops directory and ensure it exists
         crops_dir = Path('/app/uploads/crops')
         crops_dir.mkdir(parents=True, exist_ok=True)
+        print(f"DEBUG: Crops directory path: {crops_dir}")
+        print(f"DEBUG: Crops directory exists: {crops_dir.exists()}")
+        print(f"DEBUG: Crops directory is writable: {os.access(crops_dir, os.W_OK)}")
         
         # Save and preprocess uploaded image
         suffix = Path(image.filename).suffix or '.jpg'
@@ -209,7 +212,14 @@ async def infer(image: UploadFile = File(...)):
                         crop = img.crop((x_pixel, y_pixel, x_pixel + w_pixel, y_pixel + h_pixel))
                         crop_filename = f"{label}_{i}_{conf:.2f}.jpg"
                         crop_path = crops_dir / crop_filename
-                        crop.save(crop_path, format='JPEG', quality=95)
+                        print(f"DEBUG: Saving crop to: {crop_path}")
+                        try:
+                            crop.save(crop_path, format='JPEG', quality=95)
+                            print(f"DEBUG: Successfully saved crop to: {crop_path}")
+                            print(f"DEBUG: Crop file exists: {crop_path.exists()}")
+                        except Exception as e:
+                            print(f"DEBUG: Error saving crop: {str(e)}")
+                            raise
                         
                         detections.append({
                             'label': label,
