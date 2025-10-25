@@ -84,24 +84,53 @@ app.get('/crops/*', async (req, res) => {
     
     console.log('🔄 Proxying crop image request to:', fullUrl);
     
+    // Add CORS headers
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Handle OPTIONS request
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    
     // Determine which protocol to use based on the URL
     const protocol = fullUrl.startsWith('https') ? https : http;
     
-    protocol.get(fullUrl, (response) => {
-      // Forward the content-type header
-      res.setHeader('Content-Type', response.headers['content-type']);
-      
-      // If the image isn't found on the inference server, return 404
+    const proxyReq = protocol.get(fullUrl, (response) => {
+      // If the image isn't found on the inference server, try the local path
       if (response.statusCode === 404) {
-        console.log('❌ Crop image not found on inference server:', fullUrl);
+        const localPath = path.join(__dirname, 'uploads', 'crops', cropPath);
+        console.log('🔍 Checking local path:', localPath);
+        
+        if (fs.existsSync(localPath)) {
+          console.log('✅ Found crop image locally:', localPath);
+          return fs.createReadStream(localPath).pipe(res);
+        }
+        
+        console.log('❌ Crop image not found:', fullUrl);
         return res.status(404).send('Crop image not found');
       }
       
+      // Forward headers
+      Object.keys(response.headers).forEach(key => {
+        res.setHeader(key, response.headers[key]);
+      });
+      
       console.log('✅ Successfully proxying crop image:', fullUrl);
-      // Stream the response directly to the client
       response.pipe(res);
-    }).on('error', (err) => {
+    });
+    
+    proxyReq.on('error', (err) => {
       console.error('❌ Error proxying crop image:', err);
+      
+      // Try local path as fallback
+      const localPath = path.join(__dirname, 'uploads', 'crops', cropPath);
+      if (fs.existsSync(localPath)) {
+        console.log('✅ Found crop image locally after proxy error:', localPath);
+        return fs.createReadStream(localPath).pipe(res);
+      }
+      
       res.status(500).send('Error retrieving crop image');
     });
   } catch (error) {

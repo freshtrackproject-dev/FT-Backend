@@ -35,6 +35,26 @@ import numpy as np
 
 app = FastAPI(title="PyTorch Inference Service")
 
+# Add static file serving
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Ensure uploads/crops directory exists
+CROPS_DIR = Path("/app/uploads/crops")
+CROPS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mount the static file directory
+app.mount("/app/uploads", StaticFiles(directory="/app/uploads"), name="uploads")
+
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
 CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.25'))
@@ -230,7 +250,7 @@ async def infer(image: UploadFile = File(...)):
                                 'width': float(w),
                                 'height': float(h)
                             },
-                                                        'cropped_path': f"https://freshtrack-backend-bmwq.onrender.com/uploads/crops/{crop_filename}"
+                                                        'cropped_path': f"/app/uploads/crops/{crop_filename}"
                         })
 
         return JSONResponse({'success': True, 'detections': detections})
