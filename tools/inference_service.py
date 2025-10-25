@@ -250,7 +250,7 @@ async def infer(image: UploadFile = File(...)):
                                 'width': float(w),
                                 'height': float(h)
                             },
-                                                        'cropped_path': f"/app/uploads/crops/{crop_filename}"
+                                                        'cropped_path': f"/crops/{crop_filename}"
                         })
 
         return JSONResponse({'success': True, 'detections': detections})

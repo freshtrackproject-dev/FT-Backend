@@ -104,9 +104,8 @@ class ImageProcessor {
               }
 
               // Store the full URL to the cropped image
-              const cropImageUrl = d.cropped_path.startsWith('http')
-                ? d.cropped_path  // Use as is if it's a full URL
-                : `${INFERENCE_BASE_URL}${d.cropped_path}`; // Construct full URL
+              // Always use the main backend URL for crop images
+              const cropImageUrl = `${process.env.BACKEND_URL || 'https://freshtrack-backend-bmwq.onrender.com'}${d.cropped_path}`;
 
               return {
                 x: d.x,
