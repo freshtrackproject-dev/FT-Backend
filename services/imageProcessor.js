@@ -5,6 +5,7 @@ const { getStorageData } = require("../services/storageService");
 
 // Forward inference to a Python service (Ultralytics) by default
 const INFERENCE_URL = process.env.INFERENCE_URL || 'http://localhost:8001/infer';
+const INFERENCE_BASE_URL = INFERENCE_URL.replace('/infer', '');
 
 // Use Node.js http(s) module and form-data for multipart
 const http = require('http');
@@ -101,6 +102,12 @@ class ImageProcessor {
               ) {
                 normalizedLabel = normalizedLabel.slice(0, -1);
               }
+
+              // Store the full URL to the cropped image
+              const cropImageUrl = d.cropped_path.startsWith('http')
+                ? d.cropped_path  // Use as is if it's a full URL
+                : `${INFERENCE_BASE_URL}${d.cropped_path}`; // Construct full URL
+
               return {
                 x: d.x,
                 y: d.y,
@@ -110,6 +117,7 @@ class ImageProcessor {
                 class_id: d.class_id,
                 label: normalizedLabel,
                 storage_info: getStorageData(normalizedLabel) || null,
+                croppedImage: cropImageUrl,
               };
             });
             resolve(detections);

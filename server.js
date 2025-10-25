@@ -72,6 +72,44 @@ app.use('/uploads', (req, res, next) => {
   }
 }));
 
+// Proxy route for crop images from inference service
+const { INFERENCE_BASE_URL } = require('./services/imageProcessor');
+const http = require('http');
+const https = require('https');
+
+app.get('/crops/*', async (req, res) => {
+  try {
+    const cropPath = req.path.replace('/crops/', '');
+    const fullUrl = `${INFERENCE_BASE_URL}/app/uploads/crops/${cropPath}`;
+    
+    console.log('🔄 Proxying crop image request to:', fullUrl);
+    
+    // Determine which protocol to use based on the URL
+    const protocol = fullUrl.startsWith('https') ? https : http;
+    
+    protocol.get(fullUrl, (response) => {
+      // Forward the content-type header
+      res.setHeader('Content-Type', response.headers['content-type']);
+      
+      // If the image isn't found on the inference server, return 404
+      if (response.statusCode === 404) {
+        console.log('❌ Crop image not found on inference server:', fullUrl);
+        return res.status(404).send('Crop image not found');
+      }
+      
+      console.log('✅ Successfully proxying crop image:', fullUrl);
+      // Stream the response directly to the client
+      response.pipe(res);
+    }).on('error', (err) => {
+      console.error('❌ Error proxying crop image:', err);
+      res.status(500).send('Error retrieving crop image');
+    });
+  } catch (error) {
+    console.error('❌ Error in crop proxy route:', error);
+    res.status(500).send('Server error');
+  }
+});
+
 // Debug endpoint to check file existence
 app.get('/debug/file-exists', (req, res) => {
   const filePath = req.query.path;
