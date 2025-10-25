@@ -103,9 +103,10 @@ class ImageProcessor {
                 normalizedLabel = normalizedLabel.slice(0, -1);
               }
 
-              // Store the full URL to the cropped image
-              // Always use the main backend URL for crop images
-              const cropImageUrl = `${process.env.BACKEND_URL || 'https://freshtrack-backend-bmwq.onrender.com'}${d.cropped_path}`;
+              // Construct the full URL to the cropped image
+              // Ensure we have a valid crop path before constructing the URL
+              const cropFileName = d.cropped_path ? d.cropped_path.split('/').pop() : null;
+              const cropImageUrl = cropFileName ? `${INFERENCE_BASE_URL}/uploads/crops/${cropFileName}` : null;
 
               return {
                 x: d.x,

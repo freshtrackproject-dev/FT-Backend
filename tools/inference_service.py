@@ -26,18 +26,27 @@ Format:
 Dependencies: fastapi uvicorn python-multipart pillow ultralytics
 """
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 import tempfile
 import uvicorn
 import os
 import numpy as np
+import shutil
+
+# Ensure uploads directory exists
+UPLOADS_DIR = Path("/app/uploads")
+CROPS_DIR = UPLOADS_DIR / "crops"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+CROPS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Set permissions
+for dir_path in [UPLOADS_DIR, CROPS_DIR]:
+    os.chmod(dir_path, 0o777)
 
 app = FastAPI(title="PyTorch Inference Service")
-
-# Add static file serving
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 
 # Configure CORS
 app.add_middleware(
@@ -48,12 +57,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ensure uploads/crops directory exists
-CROPS_DIR = Path("/app/uploads/crops")
-CROPS_DIR.mkdir(parents=True, exist_ok=True)
-
-# Mount the static file directory
-app.mount("/app/uploads", StaticFiles(directory="/app/uploads"), name="uploads")
+# Mount static files
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR), check_dir=True), name="uploads")
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
