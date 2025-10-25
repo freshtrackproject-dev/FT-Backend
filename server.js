@@ -173,19 +173,17 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
 
   const normalizedDetections = detections.map((det) => {
       // Most YOLO outputs are center-x, center-y, width, height (normalized)
-      const cx = Number(det.x) || 0;
-      const cy = Number(det.y) || 0;
-      const w = Number(det.width) || 0;
-      const h = Number(det.height) || 0;
+      // Get the bounding box coordinates from the detection
+      const x = Number(det.x) || 0;
+      const y = Number(det.y) || 0;
+      const width = Number(det.width) || 0;
+      const height = Number(det.height) || 0;
 
-      let x = cx - w / 2;
-      let y = cy - h / 2;
-
-      // Clamp to [0,1]
-      x = Math.max(0, Math.min(1, x));
-      y = Math.max(0, Math.min(1, y));
-      const width = Math.max(0, Math.min(1, w));
-      const height = Math.max(0, Math.min(1, h));
+      // Ensure values are within valid range [0,1]
+      const normalizedX = Math.max(0, Math.min(1, x));
+      const normalizedY = Math.max(0, Math.min(1, y));
+      const normalizedWidth = Math.max(0, Math.min(1, width));
+      const normalizedHeight = Math.max(0, Math.min(1, height));
 
       const defaultStorage = {
         storage: det.storage?.storage || det.storage_info?.storage || 'Unknown',
@@ -199,8 +197,14 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
       return {
         label: det.label,
         confidence: Number(det.confidence) || 0,
-        bbox: { x, y, width, height },
+        bbox: { 
+          x: normalizedX, 
+          y: normalizedY, 
+          width: normalizedWidth, 
+          height: normalizedHeight 
+        },
         storage: defaultStorage,
+        croppedImage: det.croppedImage,
       };
     });
 

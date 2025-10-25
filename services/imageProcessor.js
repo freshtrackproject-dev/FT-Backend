@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { URL } = require("url");
+const sharp = require("sharp");
 const { getStorageData } = require("../services/storageService");
 
 // Forward inference to a Python service (Ultralytics) by default
@@ -88,6 +89,7 @@ class ImageProcessor {
               throw new Error(`Inference service error: ${res.statusCode} ${res.statusMessage} ${data}`);
             }
             const json = JSON.parse(data);
+            console.log('📥 Raw inference response:', JSON.stringify(json, null, 2));
             // Expect json.detections as array of {x,y,width,height,confidence,class_id,label}
             // Map to internal postprocess-like detections with storage_info
             const detections = (json.detections || []).map((d) => {
@@ -145,6 +147,34 @@ async function getModelInfo() {
   };
 }
 
+async function cropDetectedObject(imagePath, detection, index) {
+  try {
+    const image = sharp(imagePath);
+    const metadata = await image.metadata();
+    
+    // Convert normalized coordinates to actual pixels
+    const x = Math.floor(detection.x * metadata.width);
+    const y = Math.floor(detection.y * metadata.height);
+    const width = Math.floor(detection.width * metadata.width);
+    const height = Math.floor(detection.height * metadata.height);
+    
+    // Generate crop filename
+    const ext = path.extname(imagePath);
+    const basename = path.basename(imagePath, ext);
+    const cropPath = path.join(path.dirname(imagePath), `${basename}_crop_${index}${ext}`);
+    
+    // Crop and save the image
+    await image
+      .extract({ left: x, top: y, width, height })
+      .toFile(cropPath);
+    
+    return cropPath;
+  } catch (error) {
+    console.error(`Error cropping object: ${error.message}`);
+    return null;
+  }
+}
+
 async function processImage(filePath) {
   const detectionDate = new Date().toISOString();
   console.log(`🔄 Processing image at ${filePath}`);
@@ -153,18 +183,28 @@ async function processImage(filePath) {
     const detections = await imageProcessor.detectObjects(filePath);
 
     // ✅ Add calculated shelf life data
-    const enriched = detections.map((det) => {
+    // Process each detection and crop the objects
+    const enriched = await Promise.all(detections.map(async (det, index) => {
       const info = det.storage_info;
+      
+      // Crop the detected object
+      const croppedPath = await cropDetectedObject(filePath, det, index);
+      const croppedUrl = croppedPath ? `/uploads/${path.basename(croppedPath)}` : null;
+      
       if (info && info.shelf_life) {
         const daysElapsed = 0;
         return {
           ...det,
           detection_date: detectionDate,
           remaining_life: info.shelf_life - daysElapsed,
+          croppedImage: croppedUrl
         };
       }
-      return det;
-    });
+      return {
+        ...det,
+        croppedImage: croppedUrl
+      };
+    }));
 
     console.log(`✅ Detection complete: ${enriched.length} objects found`);
     console.log('🔍 Detection details:', JSON.stringify(enriched, null, 2));
