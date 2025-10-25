@@ -158,6 +158,8 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
 
     const imagePath = path.join(UPLOAD_DIR, req.file.filename);
     console.log(`🖼️ Preprocessing image: ${imagePath}`);
+    console.log('📝 Request headers:', req.headers);
+    console.log('📁 File info:', req.file);
 
     // Run model detection
     const start = Date.now();
@@ -202,12 +204,19 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
       };
     });
 
-    res.status(200).json({
+    const response = {
       success: true,
       detections: normalizedDetections,
       processing_time_ms,
       timestamp: new Date().toISOString(),
-    });
+      imageUrl: `/uploads/${req.file.filename}`
+    };
+    
+    console.log('✨ Normalized detections:', JSON.stringify(normalizedDetections, null, 2));
+    console.log(`⏱️ Processing time: ${processing_time_ms}ms`);
+    console.log('📤 Sending response:', JSON.stringify(response, null, 2));
+    
+    res.status(200).json(response);
     // Note: processImage already attempts to delete the uploaded file. No further cleanup here.
   } catch (error) {
     console.error('❌ Detection error:', error);

@@ -147,7 +147,9 @@ async function getModelInfo() {
 
 async function processImage(filePath) {
   const detectionDate = new Date().toISOString();
+  console.log(`🔄 Processing image at ${filePath}`);
   try {
+    console.log(`🌐 Sending request to inference service at ${INFERENCE_URL}`);
     const detections = await imageProcessor.detectObjects(filePath);
 
     // ✅ Add calculated shelf life data
@@ -165,6 +167,13 @@ async function processImage(filePath) {
     });
 
     console.log(`✅ Detection complete: ${enriched.length} objects found`);
+    console.log('🔍 Detection details:', JSON.stringify(enriched, null, 2));
+    
+    // Log storage info for each detection
+    enriched.forEach(det => {
+      console.log(`📦 Storage info for ${det.label}:`, JSON.stringify(det.storage_info, null, 2));
+    });
+    
     return enriched;
   } catch (error) {
     console.error("❌ Error during YOLO detection:", error);
