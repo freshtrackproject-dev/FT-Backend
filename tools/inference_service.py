@@ -230,7 +230,7 @@ async def infer(image: UploadFile = File(...)):
                                 'width': float(w),
                                 'height': float(h)
                             },
-                            'cropped_path': f"https://freshtrack-backend-bmwq.onrender.com/uploads/crops/{crop_filename}"
+                                                        'cropped_path': f"https://freshtrack-backend-bmwq.onrender.com/uploads/crops/{crop_filename}"
                         })
 
         return JSONResponse({'success': True, 'detections': detections})

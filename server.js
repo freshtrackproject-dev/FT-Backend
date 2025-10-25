@@ -46,15 +46,31 @@ app.use(morgan(LOG_FORMAT));
 
 // Serve uploaded files and crops
 app.use('/uploads', (req, res, next) => {
-  console.log('📸 Serving file from uploads:', req.url);
+  const filePath = path.join(__dirname, 'uploads', req.url);
+  console.log('📸 Request for:', req.url);
+  console.log('📸 Full path:', filePath);
+  console.log('📸 File exists:', fs.existsSync(filePath));
+  
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
+
+  if (!fs.existsSync(filePath)) {
+    console.log('❌ File not found:', filePath);
+    return res.status(404).send('File not found');
+  }
+
   next();
-}, express.static(path.join(__dirname, 'uploads')));
+}, express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, path, stat) => {
+    res.set('Cache-Control', 'no-cache');
+    res.set('Content-Type', 'image/jpeg');
+  }
+}));
 
 // Debug endpoint to check file existence
 app.get('/debug/file-exists', (req, res) => {
