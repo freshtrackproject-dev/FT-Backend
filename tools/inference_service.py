@@ -299,20 +299,32 @@ async def infer(image: UploadFile = File(...)):
                         # Get class label
                         label = model.names.get(cls_id, f'class_{cls_id}')
                         
-                        # Convert normalized coordinates back to pixels for cropping
-                        x_pixel = int(x * orig_width)
-                        y_pixel = int(y * orig_height)
-                        w_pixel = int(w * orig_width)
-                        h_pixel = int(h * orig_height)
+                        # Convert normalized coordinates (center_x, center_y, width, height) to pixels
+                        # YOLO format is (center_x, center_y, width, height) normalized
+                        # Convert to (x1, y1, x2, y2) in pixels for cropping
+                        half_w = (w * orig_width) / 2
+                        half_h = (h * orig_height) / 2
+                        center_x = x * orig_width
+                        center_y = y * orig_height
                         
-                        # Ensure coordinates are within bounds
-                        x_pixel = max(0, x_pixel)
-                        y_pixel = max(0, y_pixel)
-                        w_pixel = min(w_pixel, orig_width - x_pixel)
-                        h_pixel = min(h_pixel, orig_height - y_pixel)
+                        # Calculate box corners
+                        x_pixel = int(max(0, center_x - half_w))
+                        y_pixel = int(max(0, center_y - half_h))
+                        x2_pixel = int(min(orig_width, center_x + half_w))
+                        y2_pixel = int(min(orig_height, center_y + half_h))
+                        
+                        # Add some padding around the object (10%)
+                        padding_x = int((x2_pixel - x_pixel) * 0.1)
+                        padding_y = int((y2_pixel - y_pixel) * 0.1)
+                        
+                        # Apply padding while keeping within image bounds
+                        x_pixel = max(0, x_pixel - padding_x)
+                        y_pixel = max(0, y_pixel - padding_y)
+                        x2_pixel = min(orig_width, x2_pixel + padding_x)
+                        y2_pixel = min(orig_height, y2_pixel + padding_y)
                         
                         # Crop and save the detected object
-                        crop = img.crop((x_pixel, y_pixel, x_pixel + w_pixel, y_pixel + h_pixel))
+                        crop = img.crop((x_pixel, y_pixel, x2_pixel, y2_pixel))
                         crop_filename = f"{label}_{i}_{conf:.2f}.jpg"
                         crop_path = crops_dir / crop_filename
                         print(f"DEBUG: Saving crop to: {crop_path}")
