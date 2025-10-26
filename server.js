@@ -80,7 +80,7 @@ const https = require('https');
 app.get('/crops/*', async (req, res) => {
   try {
     const cropPath = req.path.replace('/crops/', '');
-    const fullUrl = `${INFERENCE_BASE_URL}/app/uploads/crops/${cropPath}`;
+    const fullUrl = `${INFERENCE_BASE_URL}/uploads/crops/${cropPath}`;
     
     console.log('🔄 Proxying crop image request to:', fullUrl);
     

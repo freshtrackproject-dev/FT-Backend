@@ -103,10 +103,15 @@ class ImageProcessor {
                 normalizedLabel = normalizedLabel.slice(0, -1);
               }
 
-              // Construct the full URL to the cropped image
-              // Ensure we have a valid crop path before constructing the URL
-              const cropFileName = d.cropped_path ? d.cropped_path.split('/').pop() : null;
-              const cropImageUrl = cropFileName ? `${INFERENCE_BASE_URL}/uploads/crops/${cropFileName}` : null;
+              // Use the full cropped_path from inference service
+              const cropImageUrl = d.cropped_path ? `${INFERENCE_BASE_URL}${d.cropped_path}` : null;
+              
+              // Log the URL construction for debugging
+              console.log(`🖼️ Constructed crop URL for ${d.label}:`, {
+                originalPath: d.cropped_path,
+                fullUrl: cropImageUrl,
+                inferenceBaseUrl: INFERENCE_BASE_URL
+              });
 
               return {
                 x: d.x,

@@ -57,8 +57,82 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR), check_dir=True), name="uploads")
+# Add file existence check endpoint
+@app.get("/check-file")
+async def check_file(filepath: str):
+    try:
+        # Remove /uploads from the start of the path as it's already included in UPLOADS_DIR
+        clean_path = filepath.replace("/uploads/", "")
+        full_path = UPLOADS_DIR / clean_path
+
+        print(f"DEBUG: Checking file existence:")
+        print(f"  Input path: {filepath}")
+        print(f"  Cleaned path: {clean_path}")
+        print(f"  Full path: {full_path}")
+        print(f"  UPLOADS_DIR: {UPLOADS_DIR}")
+        print(f"  Exists: {full_path.exists()}")
+        
+        if full_path.exists():
+            stats = full_path.stat()
+            return {
+                "exists": True,
+                "path": str(full_path),
+                "size": stats.st_size,
+                "is_file": full_path.is_file(),
+                "created": stats.st_ctime,
+                "modified": stats.st_mtime
+            }
+        else:
+            # List contents of uploads directory for debugging
+            print("\nContents of uploads directory:")
+            for item in UPLOADS_DIR.rglob("*"):
+                print(f"  {item.relative_to(UPLOADS_DIR)}")
+            return {
+                "exists": False,
+                "path": str(full_path),
+                "uploads_dir_exists": UPLOADS_DIR.exists(),
+                "uploads_dir_contents": [str(p.relative_to(UPLOADS_DIR)) for p in UPLOADS_DIR.rglob("*") if p.is_file()]
+            }
+    except Exception as e:
+        print(f"ERROR checking file: {str(e)}")
+        return {"error": str(e)}
+
+# Configure static file serving with proper headers
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Create a custom StaticFiles class with logging
+class LoggingStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        print(f"\nDEBUG: Static file request:")
+        print(f"  Path: {path}")
+        print(f"  Directory: {self.directory}")
+        print(f"  Full path: {os.path.join(self.directory, path)}")
+        return await super().get_response(path, scope)
+
+# Mount static files with logging and proper headers
+app.mount("/uploads", LoggingStaticFiles(
+    directory=str(UPLOADS_DIR),
+    check_dir=True,
+    html=False,
+    headers={
+        "Cache-Control": "no-cache",
+        "Access-Control-Allow-Origin": "*",
+    }
+), name="uploads")
+
+# Add direct file serving endpoint for debugging
+@app.get("/files/{filepath:path}")
+async def serve_file(filepath: str):
+    full_path = UPLOADS_DIR / filepath
+    if not full_path.exists():
+        print(f"File not found: {full_path}")
+        return {"error": "File not found"}
+    return FileResponse(str(full_path))
+
+# Log startup configuration
+print(f"🗂️  Uploads directory: {UPLOADS_DIR} (exists: {UPLOADS_DIR.exists()}, writable: {os.access(str(UPLOADS_DIR), os.W_OK)})")
+print(f"🖼️  Crops directory: {CROPS_DIR} (exists: {CROPS_DIR.exists()}, writable: {os.access(str(CROPS_DIR), os.W_OK)})")
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
@@ -255,7 +329,7 @@ async def infer(image: UploadFile = File(...)):
                                 'width': float(w),
                                 'height': float(h)
                             },
-                                                        'cropped_path': f"/crops/{crop_filename}"
+                                                        'cropped_path': f"/uploads/crops/{crop_filename}"
                         })
 
         return JSONResponse({'success': True, 'detections': detections})
