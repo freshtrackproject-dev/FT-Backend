@@ -282,14 +282,29 @@ async def infer(image: UploadFile = File(...)):
                         cx, cy, w, h = box_data[i][:4]  # center-x, center-y, width, height
                         conf = float(box_data[i][5])    # confidence score
                         cls_id = int(box_data[i][6])    # class ID
-                        
-                        # Normalize coordinates if needed
-                        if cx > 1 or cy > 1:
-                            h, w = r.orig_shape
-                            cx = cx / w
-                            cy = cy / h
-                            w = w / w
-                            h = h / h
+
+                        # Log raw detection values for debugging
+                        raw_cx, raw_cy, raw_w, raw_h = cx, cy, w, h
+                        print(f"DEBUG: raw detection[{i}]: cx={raw_cx}, cy={raw_cy}, w={raw_w}, h={raw_h}, conf={conf}, cls={cls_id}")
+
+                        # Normalize coordinates if they're in pixel coordinates (some model outputs may be in px)
+                        # Use the actual original image width/height saved earlier (orig_width, orig_height)
+                        if cx > 1 or cy > 1 or w > 1 or h > 1:
+                            try:
+                                cx = cx / orig_width
+                                w = w / orig_width
+                                cy = cy / orig_height
+                                h = h / orig_height
+                            except Exception as e:
+                                print(f"DEBUG: Error normalizing pixel coords: {e}")
+
+                        # Ensure values are in [0,1]
+                        cx = float(max(0.0, min(1.0, cx)))
+                        cy = float(max(0.0, min(1.0, cy)))
+                        w = float(max(0.0, min(1.0, w)))
+                        h = float(max(0.0, min(1.0, h)))
+
+                        print(f"DEBUG: normalized detection[{i}]: cx={cx}, cy={cy}, w={w}, h={h}")
 
                         # Ensure values are in [0,1]
                         # Normalize and store original YOLO format coordinates (center-based)
