@@ -114,15 +114,13 @@ class ImageProcessor {
               });
 
               return {
-                x: d.x,
-                y: d.y,
-                width: d.width,
-                height: d.height,
+                bbox: d.bbox,
                 confidence: d.confidence,
-                class_id: d.class_id,
                 label: normalizedLabel,
                 storage_info: getStorageData(normalizedLabel) || null,
                 croppedImage: cropImageUrl,
+                detection_date: new Date().toISOString(),
+                remaining_life: getStorageData(normalizedLabel)?.shelf_life || 0
               };
             });
             resolve(detections);
