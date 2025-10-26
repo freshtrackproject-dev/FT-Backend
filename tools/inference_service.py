@@ -287,25 +287,20 @@ async def infer(image: UploadFile = File(...)):
                             h = h / h
 
                         # Ensure values are in [0,1]
+                        # Normalize and store original YOLO format coordinates (center-based)
                         cx = float(max(0.0, min(1.0, cx)))
                         cy = float(max(0.0, min(1.0, cy)))
                         w = float(max(0.0, min(1.0, w)))
                         h = float(max(0.0, min(1.0, h)))
 
-                        # Convert center coordinates to top-left for frontend
-                        x = cx - w/2
-                        y = cy - h/2
-
                         # Get class label
                         label = model.names.get(cls_id, f'class_{cls_id}')
                         
-                        # Convert normalized coordinates (center_x, center_y, width, height) to pixels
-                        # YOLO format is (center_x, center_y, width, height) normalized
-                        # Convert to (x1, y1, x2, y2) in pixels for cropping
+                        # Convert normalized center coordinates to pixels for cropping
+                        center_x = cx * orig_width
+                        center_y = cy * orig_height
                         half_w = (w * orig_width) / 2
                         half_h = (h * orig_height) / 2
-                        center_x = x * orig_width
-                        center_y = y * orig_height
                         
                         # Calculate box corners
                         x_pixel = int(max(0, center_x - half_w))
@@ -323,8 +318,36 @@ async def infer(image: UploadFile = File(...)):
                         x2_pixel = min(orig_width, x2_pixel + padding_x)
                         y2_pixel = min(orig_height, y2_pixel + padding_y)
                         
-                        # Crop and save the detected object
+                        # Crop and resize the detected object
+                        TARGET_SIZE = (224, 224)  # Standard size for crops
                         crop = img.crop((x_pixel, y_pixel, x2_pixel, y2_pixel))
+                        
+                        # Calculate aspect ratio preserving resize dimensions
+                        crop_width, crop_height = crop.size
+                        aspect_ratio = crop_width / crop_height
+                        
+                        if aspect_ratio > 1:
+                            # Width is larger
+                            new_width = TARGET_SIZE[0]
+                            new_height = int(new_width / aspect_ratio)
+                        else:
+                            # Height is larger
+                            new_height = TARGET_SIZE[1]
+                            new_width = int(new_height * aspect_ratio)
+                            
+                        # Create a white background image of target size
+                        final_crop = Image.new('RGB', TARGET_SIZE, 'white')
+                        
+                        # Resize the crop
+                        resized_crop = crop.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                        
+                        # Calculate position to paste (center the resized image)
+                        paste_x = (TARGET_SIZE[0] - new_width) // 2
+                        paste_y = (TARGET_SIZE[1] - new_height) // 2
+                        
+                        # Paste the resized crop onto the white background
+                        final_crop.paste(resized_crop, (paste_x, paste_y))
+                        
                         crop_filename = f"{label}_{i}_{conf:.2f}.jpg"
                         crop_path = crops_dir / crop_filename
                         print(f"DEBUG: Saving crop to: {crop_path}")
@@ -336,14 +359,21 @@ async def infer(image: UploadFile = File(...)):
                             print(f"DEBUG: Error saving crop: {str(e)}")
                             raise
                         
+                        # Calculate normalized bounding box coordinates
+                        # Keep original coordinates for accuracy
+                        norm_x = max(0.0, min(1.0, (x_pixel / orig_width)))
+                        norm_y = max(0.0, min(1.0, (y_pixel / orig_height)))
+                        norm_width = max(0.0, min(1.0, ((x2_pixel - x_pixel) / orig_width)))
+                        norm_height = max(0.0, min(1.0, ((y2_pixel - y_pixel) / orig_height)))
+                        
                         detections.append({
                             'label': label,
                             'confidence': conf,
                             'bbox': {
-                                'x': float(max(0.0, min(1.0, x))),
-                                'y': float(max(0.0, min(1.0, y))),
-                                'width': float(w),
-                                'height': float(h)
+                                'x': norm_x,  # Use actual crop coordinates
+                                'y': norm_y,  # Use actual crop coordinates
+                                'width': norm_width,
+                                'height': norm_height
                             },
                                                         'cropped_path': f"/uploads/crops/{crop_filename}"
                         })
