@@ -164,13 +164,13 @@ async function processImage(filePath) {
     console.log(`🌐 Sending request to inference service at ${INFERENCE_URL}`);
     const detections = await imageProcessor.detectObjects(filePath);
 
-    // ✅ Add calculated shelf life data and use cropped images
+    // ✅ Add calculated shelf life data and pass through cropped images
     const enriched = detections.map(det => {
       const info = det.storage_info;
-      
-      // Use the cropped_path from the inference service
-      const croppedUrl = det.cropped_path || null;
-      
+
+      // `det.croppedImage` already contains the full URL constructed earlier
+      const croppedUrl = det.croppedImage || null;
+
       if (info && info.shelf_life) {
         const daysElapsed = 0;
         return {
