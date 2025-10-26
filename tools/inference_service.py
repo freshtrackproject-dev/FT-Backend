@@ -110,16 +110,20 @@ class LoggingStaticFiles(StaticFiles):
         print(f"  Full path: {os.path.join(self.directory, path)}")
         return await super().get_response(path, scope)
 
-# Mount static files with logging and proper headers
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files with logging
 app.mount("/uploads", LoggingStaticFiles(
     directory=str(UPLOADS_DIR),
     check_dir=True,
-    html=False,
-    headers={
-        "Cache-Control": "no-cache",
-        "Access-Control-Allow-Origin": "*",
-    }
-), name="uploads")
+    html=False), name="uploads")
 
 # Add direct file serving endpoint for debugging
 @app.get("/files/{filepath:path}")
