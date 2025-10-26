@@ -302,29 +302,24 @@ async def infer(image: UploadFile = File(...)):
                         half_w = (w * orig_width) / 2
                         half_h = (h * orig_height) / 2
                         
-                        # Calculate box corners
+                        # Calculate box corners for exact crop
                         x_pixel = int(max(0, center_x - half_w))
                         y_pixel = int(max(0, center_y - half_h))
                         x2_pixel = int(min(orig_width, center_x + half_w))
                         y2_pixel = int(min(orig_height, center_y + half_h))
                         
-                        # Add some padding around the object (10%)
-                        padding_x = int((x2_pixel - x_pixel) * 0.1)
-                        padding_y = int((y2_pixel - y_pixel) * 0.1)
+                        # First crop the exact bounding box
+                        exact_crop = img.crop((x_pixel, y_pixel, x2_pixel, y2_pixel))
                         
-                        # Apply padding while keeping within image bounds
-                        x_pixel = max(0, x_pixel - padding_x)
-                        y_pixel = max(0, y_pixel - padding_y)
-                        x2_pixel = min(orig_width, x2_pixel + padding_x)
-                        y2_pixel = min(orig_height, y2_pixel + padding_y)
+                        # Resize to a standard size (224x224 is common for many vision models)
+                        TARGET_SIZE = (224, 224)
+                        resized_crop = exact_crop.resize(TARGET_SIZE, Image.Resampling.LANCZOS)
                         
-                        # Crop and save the detected object
-                        crop = img.crop((x_pixel, y_pixel, x2_pixel, y2_pixel))
                         crop_filename = f"{label}_{i}_{conf:.2f}.jpg"
                         crop_path = crops_dir / crop_filename
                         print(f"DEBUG: Saving crop to: {crop_path}")
                         try:
-                            crop.save(crop_path, format='JPEG', quality=95)
+                            resized_crop.save(crop_path, format='JPEG', quality=95)
                             print(f"DEBUG: Successfully saved crop to: {crop_path}")
                             print(f"DEBUG: Crop file exists: {crop_path.exists()}")
                         except Exception as e:
