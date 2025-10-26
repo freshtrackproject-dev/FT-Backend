@@ -250,17 +250,20 @@ async def infer(image: UploadFile = File(...)):
 
         # Run inference
         model = get_model()
-        results = model.predict(
-            source=str(tmp_path),
-            imgsz=IMG_SIZE,
-            conf=CONF_THRESHOLD,
-            iou=IOU_THRESHOLD,
-            max_det=MAX_DET,
-            device='cpu',
-            verbose=True
-        )
-
-        if not results:
+            results = model.predict(
+                source=str(tmp_path),
+                imgsz=IMG_SIZE,
+                conf=CONF_THRESHOLD,
+                iou=IOU_THRESHOLD,
+                max_det=MAX_DET,
+                device='cpu',
+                verbose=True,
+                save=False,  # Don't save annotated images
+                show=False,  # Don't show visualization
+                save_txt=False,  # Don't save labels
+                save_conf=False,  # Don't save confidences
+                save_crop=False  # Don't use YOLO's built-in cropping
+            )        if not results:
             return JSONResponse({'success': True, 'detections': []})
 
         r = results[0]
