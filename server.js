@@ -260,6 +260,20 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
         status: det.storage?.status || det.storage_info?.status || 'Unknown',
         waste_disposal: det.storage?.waste_disposal ?? det.storage_info?.waste_disposal ?? null,
       };
+      
+      // Include extended storage details when available so the frontend can render rich info
+      if (det.storage?.storage_methods || det.storage_info?.storage_methods) {
+        defaultStorage.storage_methods = det.storage?.storage_methods || det.storage_info?.storage_methods;
+      }
+      if (det.storage?.ripeness_guide || det.storage_info?.ripeness_guide) {
+        defaultStorage.ripeness_guide = det.storage?.ripeness_guide || det.storage_info?.ripeness_guide;
+      }
+      if (det.storage?.preparation_tips || det.storage_info?.preparation_tips) {
+        defaultStorage.preparation_tips = det.storage?.preparation_tips || det.storage_info?.preparation_tips;
+      }
+      if (det.storage?.source || det.storage_info?.source) {
+        defaultStorage.source = det.storage?.source || det.storage_info?.source;
+      }
 
       return {
         label: det.label,
