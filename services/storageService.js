@@ -606,10 +606,33 @@ class StorageService {
 
     const normalized = this.normalizeLabel(itemName);
 
-    if (this.storageData[normalized]) return this.storageData[normalized];
+    // Try direct hit first
+    let entry = null;
+    if (this.storageData[normalized]) {
+      entry = this.storageData[normalized];
+    } else {
+      // Fallback: case-insensitive match
+      for (const [key, value] of Object.entries(this.storageData)) {
+        if (key.toLowerCase() === normalized.toLowerCase()) {
+          entry = value;
+          break;
+        }
+      }
+    }
 
-    for (const [key, value] of Object.entries(this.storageData)) {
-      if (key.toLowerCase() === normalized.toLowerCase()) return value;
+    if (entry) {
+      // Merge with DEFAULT_STORAGE_DATA to provide any richer structured defaults
+      const defaultEntry = DEFAULT_STORAGE_DATA[normalized] || {};
+      return {
+        // start with defaults, override with stored entry values
+        ...defaultEntry,
+        ...entry,
+        // Ensure structured fields are never null so frontend can render safely
+        storage_methods: entry.storage_methods ?? defaultEntry.storage_methods ?? [],
+        ripeness_guide: entry.ripeness_guide ?? defaultEntry.ripeness_guide ?? {},
+        preparation_tips: entry.preparation_tips ?? defaultEntry.preparation_tips ?? {},
+        source: entry.source ?? defaultEntry.source ?? 'Unknown',
+      };
     }
 
     console.warn(`⚠️ No storage data found for "${itemName}"`);
