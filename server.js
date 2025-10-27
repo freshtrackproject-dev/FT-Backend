@@ -285,7 +285,18 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
           height: normalizedHeight 
         },
         storage: defaultStorage,
-        // Pass through the full URL constructed by the image processor (if present)
+        // Provide both a normalized cropped_path (relative path) and the full croppedImage URL when available.
+        // Frontend mapping prefers cropped_path and will resolve to the backend proxy /crops/:file.
+        cropped_path: (function() {
+          try {
+            if (det.cropped_path) return det.cropped_path;
+            if (det.croppedImage && String(det.croppedImage).startsWith('http')) {
+              const u = new URL(det.croppedImage);
+              return u.pathname; // e.g. /uploads/crops/xxx.jpg
+            }
+            return det.croppedImage || null;
+          } catch (e) { return det.cropped_path || det.croppedImage || null; }
+        })(),
         croppedImage: det.croppedImage || null,
       };
     });
