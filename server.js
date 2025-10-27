@@ -260,10 +260,11 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
         status: det.storage?.status || det.storage_info?.status || 'Unknown',
         waste_disposal: det.storage?.waste_disposal ?? det.storage_info?.waste_disposal ?? null,
         // Additional structured fields (may be present in the storage DB)
-        storage_methods: det.storage?.storage_methods || det.storage_info?.storage_methods || null,
-        ripeness_guide: det.storage?.ripeness_guide || det.storage_info?.ripeness_guide || null,
-        preparation_tips: det.storage?.preparation_tips || det.storage_info?.preparation_tips || null,
-        source: det.storage?.source || det.storage_info?.source || null,
+        // Use safe defaults to avoid nulls rendering in the frontend
+        storage_methods: det.storage?.storage_methods || det.storage_info?.storage_methods || [],
+        ripeness_guide: det.storage?.ripeness_guide || det.storage_info?.ripeness_guide || {},
+        preparation_tips: det.storage?.preparation_tips || det.storage_info?.preparation_tips || {},
+        source: det.storage?.source || det.storage_info?.source || 'Unknown',
       };
 
       return {
