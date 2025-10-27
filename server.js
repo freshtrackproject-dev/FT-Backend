@@ -259,21 +259,12 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
         signs_of_spoilage: det.storage?.signs_of_spoilage || det.storage_info?.signs_of_spoilage || 'No data available',
         status: det.storage?.status || det.storage_info?.status || 'Unknown',
         waste_disposal: det.storage?.waste_disposal ?? det.storage_info?.waste_disposal ?? null,
+        // Additional structured fields (may be present in the storage DB)
+        storage_methods: det.storage?.storage_methods || det.storage_info?.storage_methods || null,
+        ripeness_guide: det.storage?.ripeness_guide || det.storage_info?.ripeness_guide || null,
+        preparation_tips: det.storage?.preparation_tips || det.storage_info?.preparation_tips || null,
+        source: det.storage?.source || det.storage_info?.source || null,
       };
-      
-      // Include extended storage details when available so the frontend can render rich info
-      if (det.storage?.storage_methods || det.storage_info?.storage_methods) {
-        defaultStorage.storage_methods = det.storage?.storage_methods || det.storage_info?.storage_methods;
-      }
-      if (det.storage?.ripeness_guide || det.storage_info?.ripeness_guide) {
-        defaultStorage.ripeness_guide = det.storage?.ripeness_guide || det.storage_info?.ripeness_guide;
-      }
-      if (det.storage?.preparation_tips || det.storage_info?.preparation_tips) {
-        defaultStorage.preparation_tips = det.storage?.preparation_tips || det.storage_info?.preparation_tips;
-      }
-      if (det.storage?.source || det.storage_info?.source) {
-        defaultStorage.source = det.storage?.source || det.storage_info?.source;
-      }
 
       return {
         label: det.label,
@@ -285,18 +276,7 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
           height: normalizedHeight 
         },
         storage: defaultStorage,
-        // Provide both a normalized cropped_path (relative path) and the full croppedImage URL when available.
-        // Frontend mapping prefers cropped_path and will resolve to the backend proxy /crops/:file.
-        cropped_path: (function() {
-          try {
-            if (det.cropped_path) return det.cropped_path;
-            if (det.croppedImage && String(det.croppedImage).startsWith('http')) {
-              const u = new URL(det.croppedImage);
-              return u.pathname; // e.g. /uploads/crops/xxx.jpg
-            }
-            return det.croppedImage || null;
-          } catch (e) { return det.cropped_path || det.croppedImage || null; }
-        })(),
+        // Pass through the full URL constructed by the image processor (if present)
         croppedImage: det.croppedImage || null,
       };
     });
