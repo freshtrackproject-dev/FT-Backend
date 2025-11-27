@@ -142,8 +142,8 @@ MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
 # Updated threshold based on model performance metrics (mAP50: 0.879, Precision: 0.844)
 # Higher threshold reduces false positives while maintaining good detection rate
-CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.5'))
-IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.5'))
+CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.75'))
+IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.75'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
 # Lazy load model
