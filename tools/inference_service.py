@@ -1,30 +1,3 @@
-"""
-Minimal FastAPI inference service for Ultralytics YOLO OBB model.
-
-This service:
-1. Accepts images via POST /infer endpoint
-2. Runs YOLO OBB detection
-3. Returns normalized bounding boxes in the format expected by the frontend
-
-Format:
-{
-    "success": true,
-    "detections": [
-        {
-            "label": str,
-            "confidence": float,
-            "bbox": {
-                "x": float,  # normalized top-left x
-                "y": float,  # normalized top-left y
-                "width": float,
-                "height": float
-            }
-        }
-    ]
-}
-
-Dependencies: fastapi uvicorn python-multipart pillow ultralytics
-"""
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,19 +9,16 @@ import os
 import numpy as np
 import shutil
 
-# Ensure uploads directory exists
 UPLOADS_DIR = Path("/app/uploads")
 CROPS_DIR = UPLOADS_DIR / "crops"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 CROPS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Set permissions
 for dir_path in [UPLOADS_DIR, CROPS_DIR]:
     os.chmod(dir_path, 0o777)
 
 app = FastAPI(title="PyTorch Inference Service")
 
-# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -57,11 +27,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add file existence check endpoint
 @app.get("/check-file")
 async def check_file(filepath: str):
     try:
-        # Remove /uploads from the start of the path as it's already included in UPLOADS_DIR
         clean_path = filepath.replace("/uploads/", "")
         full_path = UPLOADS_DIR / clean_path
 
@@ -83,7 +51,6 @@ async def check_file(filepath: str):
                 "modified": stats.st_mtime
             }
         else:
-            # List contents of uploads directory for debugging
             print("\nContents of uploads directory:")
             for item in UPLOADS_DIR.rglob("*"):
                 print(f"  {item.relative_to(UPLOADS_DIR)}")
@@ -97,11 +64,9 @@ async def check_file(filepath: str):
         print(f"ERROR checking file: {str(e)}")
         return {"error": str(e)}
 
-# Configure static file serving with proper headers
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-# Create a custom StaticFiles class with logging
 class LoggingStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         print(f"\nDEBUG: Static file request:")
@@ -110,7 +75,6 @@ class LoggingStaticFiles(StaticFiles):
         print(f"  Full path: {os.path.join(self.directory, path)}")
         return await super().get_response(path, scope)
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -125,7 +89,6 @@ app.mount("/uploads", LoggingStaticFiles(
     check_dir=True,
     html=False), name="uploads")
 
-# Add direct file serving endpoint for debugging
 @app.get("/files/{filepath:path}")
 async def serve_file(filepath: str):
     full_path = UPLOADS_DIR / filepath
@@ -134,19 +97,17 @@ async def serve_file(filepath: str):
         return {"error": "File not found"}
     return FileResponse(str(full_path))
 
-# Log startup configuration
 print(f"🗂️  Uploads directory: {UPLOADS_DIR} (exists: {UPLOADS_DIR.exists()}, writable: {os.access(str(UPLOADS_DIR), os.W_OK)})")
 print(f"🖼️  Crops directory: {CROPS_DIR} (exists: {CROPS_DIR.exists()}, writable: {os.access(str(CROPS_DIR), os.W_OK)})")
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
-# Updated threshold based on model performance metrics (mAP50: 0.879, Precision: 0.844)
-# Higher threshold reduces false positives while maintaining good detection rate
-CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.5'))
+
+CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.70'))
 IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.5'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
-# Lazy load model
+# temporary model
 _model = None
 
 try:
@@ -170,7 +131,6 @@ def get_model():
             print(f"DEBUG: Model task: {getattr(_model, 'task', 'unknown')}")
             print(f"DEBUG: Model names: {getattr(_model, 'names', {})}")
             
-            # Configure inference parameters
             _model.overrides = {
                 'conf': CONF_THRESHOLD,
                 'iou': IOU_THRESHOLD,
@@ -250,7 +210,6 @@ async def infer(image: UploadFile = File(...)):
         # Store original image size for later use
         orig_width, orig_height = img.size
 
-        # Run inference
         model = get_model()
         results = model.predict(
             source=str(tmp_path),
@@ -260,11 +219,11 @@ async def infer(image: UploadFile = File(...)):
             max_det=MAX_DET,
             device='cpu',
             verbose=True,
-            save=False,  # Don't save annotated images
-            show=False,  # Don't show visualization
-            save_txt=False,  # Don't save labels
-            save_conf=False,  # Don't save confidences
-            save_crop=False  # Don't use YOLO's built-in cropping
+            save=False,  
+            show=False, 
+            save_txt=False,  
+            save_conf=False,  
+            save_crop=False  
         )
         
         if not results:
