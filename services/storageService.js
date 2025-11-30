@@ -421,13 +421,15 @@ const DEFAULT_STORAGE_DATA = {
   "source": "USDA & University of California Agriculture and Natural Resources"
 },
   "Rotten_Orange": {
-    "storage": "DISPOSE IMMEDIATELY",
-    "shelf_life": 0,
-    "tips": "Do not consume - dispose safely",
-    "signs_of_spoilage": "Mold, soft spots, dry texture, strong odor",
-    "status": "Rotten",
-    "waste_disposal": "Compost if no mold, otherwise dispose in sealed bag in trash"
-  },
+  "storage": "Do not store; discard immediately.",
+  "shelf_life": 0,
+  "tips": "Citrus fruits with mold can spread spores quickly. Even small mold spots indicate internal spoilage.",
+  "signs_of_spoilage": "Soft or sunken areas, white/green/blue mold, fermented smell, leaking juice, bitter or off odor",
+  "status": "Rotten",
+  "waste_disposal": "Do not compost moldy citrus; seal in a plastic bag and discard in trash.",
+  "storage_methods": [],
+  "source": "USDA & Clemson Cooperative Extension"
+},
   "Rotten_Manggo": {
   "storage": "Do not store; discard immediately.",
   "shelf_life": 0,
@@ -439,13 +441,15 @@ const DEFAULT_STORAGE_DATA = {
   "source": "USDA & National Center for Home Food Preservation"
 },
   "Rotten_Strawberry": {
-    "storage": "DISPOSE IMMEDIATELY",
-    "shelf_life": 0,
-    "tips": "Do not consume - dispose safely",
-    "signs_of_spoilage": "Mold, soft spots, wrinkled skin, strong odor",
-    "status": "Rotten",
-    "waste_disposal": "Compost if no mold, otherwise dispose in sealed bag in trash"
-  },
+  "storage": "Do not store; discard immediately.",
+  "shelf_life": 0,
+  "tips": "Strawberries spoil extremely fast. One moldy berry can spread contamination throughout the entire container.",
+  "signs_of_spoilage": "White or green mold, mushy or collapsing texture, dark wet spots, fermented or sour odor",
+  "status": "Rotten",
+  "waste_disposal": "Do NOT compost moldy berries. Seal in a bag and dispose in household trash.",
+  "storage_methods": [],
+  "source": "USDA & UC Agriculture and Natural Resources"
+},
 
 // =============================================================================================================================
 //                                                       Rotten Vegetables
@@ -471,6 +475,36 @@ const DEFAULT_STORAGE_DATA = {
   "storage_methods": [],
   "source": "USDA & University of Wisconsin Horticulture"
 },
+"Rotten_Okra": {
+  "storage": "Do not store; discard immediately.",
+  "shelf_life": 0,
+  "tips": "Okra becomes slimy very quickly once it starts spoiling. Keep spoiled okra away from fresh produce.",
+  "signs_of_spoilage": "Slimy coating, dark brown/black spots, mushy texture, sour or unpleasant odor, mold patches",
+  "status": "Rotten",
+  "waste_disposal": "Compost only if there is no mold present. If moldy, seal in a bag and place in trash.",
+  "storage_methods": [],
+  "source": "USDA & University of Florida IFAS Extension"
+},
+"Rotten_Pepper": {
+  "storage": "Do not store; discard immediately.",
+  "shelf_life": 0,
+  "tips": "Peppers deteriorate quickly once soft spots appear. Mold spreads fast inside hollow vegetables.",
+  "signs_of_spoilage": "Wrinkled or collapsing skin, soft watery areas, black spots, mold growth, sour or rotten odor",
+  "status": "Rotten",
+  "waste_disposal": "Compost only if there is no mold. If moldy, seal in a bag and discard in trash.",
+  "storage_methods": [],
+  "source": "USDA & Penn State Extension"
+},
+"Rotten_Potato": {
+  "storage": "Do not store; discard immediately.",
+  "shelf_life": 0,
+  "tips": "Rotten potatoes release toxic solanine gas, which can cause headaches and nausea in enclosed spaces.",
+  "signs_of_spoilage": "Soft/mushy texture, foul sulfur-like odor, green coloration, sprouting with decay, black mold",
+  "status": "Rotten",
+  "waste_disposal": "Seal in a bag and discard in trash immediately. Do NOT compost rotten or moldy potatoes.",
+  "storage_methods": [],
+  "source": "USDA & University of Idaho Extension"
+},
 
 // =============================================================================================================================
 //                                                       Rotten Meats
@@ -493,6 +527,16 @@ const DEFAULT_STORAGE_DATA = {
   "signs_of_spoilage": "Sour or sulfur-like odor, sticky or slimy surface, gray/green discoloration, tacky texture",
   "status": "Rotten",
   "waste_disposal": "Seal securely in bags and dispose in an outdoor trash bin. Never compost rotten meat.",
+  "storage_methods": [],
+  "source": "USDA Food Safety & Inspection Service"
+},
+"Rotten_Pork": {
+  "storage": "Do not store; discard immediately to prevent bacterial contamination.",
+  "shelf_life": 0,
+  "tips": "Rotten pork can harbor harmful bacteria like Salmonella, Listeria, and E. coli. Even slight odor changes indicate spoilage.",
+  "signs_of_spoilage": "Sour or ammonia-like smell, sticky or slimy texture, gray/green discoloration, tacky surface",
+  "status": "Rotten",
+  "waste_disposal": "Seal tightly in double bags and dispose in an outdoor trash bin. Never compost rotten meat.",
   "storage_methods": [],
   "source": "USDA Food Safety & Inspection Service"
 }
@@ -531,13 +575,11 @@ class StorageService {
     if (!label) return '';
     let formatted = label.trim();
 
-    // Normalize prefixes
     if (formatted.toLowerCase().startsWith('fresh_'))
       formatted = 'Fresh_' + formatted.slice(6);
     else if (formatted.toLowerCase().startsWith('rotten_'))
       formatted = 'Rotten_' + formatted.slice(7);
 
-    // Capitalize second word
     const parts = formatted.split('_');
     if (parts.length > 1) {
       parts[1] = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
@@ -548,7 +590,6 @@ class StorageService {
   }
 
   getStorageData(itemName) {
-    // If no itemName is provided, return the whole storage dataset
     if (itemName === undefined || itemName === null) {
       return this.storageData;
     }
@@ -560,12 +601,10 @@ class StorageService {
 
     const normalized = this.normalizeLabel(itemName);
 
-    // Try direct hit first
     let entry = null;
     if (this.storageData[normalized]) {
       entry = this.storageData[normalized];
     } else {
-      // Fallback: case-insensitive match
       for (const [key, value] of Object.entries(this.storageData)) {
         if (key.toLowerCase() === normalized.toLowerCase()) {
           entry = value;
@@ -575,13 +614,10 @@ class StorageService {
     }
 
     if (entry) {
-      // Merge with DEFAULT_STORAGE_DATA to provide any richer structured defaults
       const defaultEntry = DEFAULT_STORAGE_DATA[normalized] || {};
       return {
-        // start with defaults, override with stored entry values
         ...defaultEntry,
         ...entry,
-        // Ensure structured fields are never null so frontend can render safely
         storage_methods: entry.storage_methods ?? defaultEntry.storage_methods ?? [],
         ripeness_guide: entry.ripeness_guide ?? defaultEntry.ripeness_guide ?? {},
         preparation_tips: entry.preparation_tips ?? defaultEntry.preparation_tips ?? {},

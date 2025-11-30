@@ -3,21 +3,18 @@ const path = require("path");
 const { URL } = require("url");
 const { getStorageData } = require("../services/storageService");
 
-// Forward inference to a Python service (Ultralytics) by default
 const INFERENCE_URL = process.env.INFERENCE_URL || 'http://localhost:8001/infer';
 const INFERENCE_BASE_URL = INFERENCE_URL.replace('/infer', '');
 
-// Use Node.js http(s) module and form-data for multipart
 const http = require('http');
 const https = require('https');
 const FormDataImpl = require('form-data');
 
 // Path and constants
-// MODEL_PATH is not used; detection is forwarded to Python service
-const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.5;
-const NMS_THRESHOLD = parseFloat(process.env.NMS_THRESHOLD) || 0.4;
+const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.75;
+const NMS_THRESHOLD = parseFloat(process.env.NMS_THRESHOLD) || 0.65;
 
-// ✅ Class names (must match YOLO training order)
+// Class Names 
 const CLASS_NAMES = [
   "Fresh_Apple",
   "Fresh_Banana",
@@ -53,20 +50,14 @@ class ImageProcessor {
   }
 
   async loadModel() {
-    // Using remote PyTorch inference service — nothing to preload here.
     return;
   }
 
-  // preprocessImage is unused; all preprocessing is handled by Python service
-
   async detectObjects(imagePath) {
-    // Forward image to Python inference service and expect detections in same basic shape
     return new Promise((resolve, reject) => {
       const form = new FormDataImpl();
       const fileStream = fs.createReadStream(imagePath);
       form.append('image', fileStream, { filename: path.basename(imagePath) });
-
-      // Parse the INFERENCE_URL to get hostname and port
       const inferenceUrl = new URL(INFERENCE_URL);
       const isHttps = inferenceUrl.protocol === 'https:';
       const options = {
@@ -138,9 +129,6 @@ class ImageProcessor {
     });
   }
 
-  // postprocess is unused; all postprocessing is handled by Python service
-
-  // nonMaxSuppression is unused; all NMS is handled by Python service
 }
 
 const imageProcessor = new ImageProcessor();
