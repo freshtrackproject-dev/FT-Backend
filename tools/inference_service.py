@@ -154,6 +154,8 @@ CLASS_SPECIFIC_THRESHOLDS = {
     'Rotten_Pepper': 0.40,    # Lower threshold for weakest class
     'Fresh_Banana': 0.48,     # Slightly lower for better recall
     'Rotten_Potato': 0.48,    # Slightly lower for better recall
+    'Fresh_Carrot': 0.40,     # Lower threshold - not getting detected
+    'Fresh_Pepper': 0.40,     # Lower threshold - hardly getting detected
 }
 
 # Lazy load model
