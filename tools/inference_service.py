@@ -140,11 +140,21 @@ print(f"🖼️  Crops directory: {CROPS_DIR} (exists: {CROPS_DIR.exists()}, wri
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / 'models' / 'best.pt'
 IMG_SIZE = int(os.getenv('IMG_SIZE', '640'))
-# Updated threshold based on model performance metrics (mAP50: 0.879, Precision: 0.844)
-# Higher threshold reduces false positives while maintaining good detection rate
-CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.65'))
-IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.5'))
+# Optimized thresholds for multi-class, multi-instance detection
+# Lower confidence threshold (0.5) to catch more detections, especially for weaker classes
+# Lower IOU threshold (0.45) to allow more overlapping detections of same/different classes
+CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.5'))
+IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.45'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
+
+# Class-specific confidence thresholds for weaker performing classes
+# Based on validation results: Rotten_Okra (mAP50-95: 0.778), Rotten_Pepper (0.701)
+CLASS_SPECIFIC_THRESHOLDS = {
+    'Rotten_Okra': 0.45,      # Lower threshold for weaker class
+    'Rotten_Pepper': 0.40,    # Lower threshold for weakest class
+    'Fresh_Banana': 0.48,     # Slightly lower for better recall
+    'Rotten_Potato': 0.48,    # Slightly lower for better recall
+}
 
 # Lazy load model
 _model = None
@@ -272,6 +282,91 @@ async def infer(image: UploadFile = File(...)):
 
         r = results[0]
         detections = []
+        
+        def get_class_threshold(label: str) -> float:
+            """Get class-specific confidence threshold or use default."""
+            return CLASS_SPECIFIC_THRESHOLDS.get(label, CONF_THRESHOLD)
+        
+        def process_detection_box(box_data, conf, cls_id, orig_width, orig_height, img, crops_dir, detection_idx):
+            """Process a single detection box (OBB or regular)."""
+            # Extract coordinates based on box format
+            if len(box_data) >= 4:
+                cx, cy, w, h = box_data[:4]  # center-x, center-y, width, height
+            else:
+                return None
+            
+            # Get class label
+            label = model.names.get(cls_id, f'class_{cls_id}')
+            
+            # Apply class-specific threshold
+            class_threshold = get_class_threshold(label)
+            if conf < class_threshold:
+                return None
+            
+            # Normalize coordinates if they're in pixel coordinates
+            if cx > 1 or cy > 1 or w > 1 or h > 1:
+                try:
+                    cx = cx / orig_width
+                    w = w / orig_width
+                    cy = cy / orig_height
+                    h = h / orig_height
+                except Exception as e:
+                    print(f"DEBUG: Error normalizing pixel coords: {e}")
+                    return None
+
+            # Ensure values are in [0,1]
+            cx = float(max(0.0, min(1.0, cx)))
+            cy = float(max(0.0, min(1.0, cy)))
+            w = float(max(0.0, min(1.0, w)))
+            h = float(max(0.0, min(1.0, h)))
+            
+            # Skip invalid boxes
+            if w <= 0 or h <= 0:
+                return None
+
+            # Convert normalized center coordinates to pixels for cropping
+            center_x = cx * orig_width
+            center_y = cy * orig_height
+            half_w = (w * orig_width) / 2
+            half_h = (h * orig_height) / 2
+            
+            # Calculate box corners for exact crop
+            x_pixel = int(max(0, center_x - half_w))
+            y_pixel = int(max(0, center_y - half_h))
+            x2_pixel = int(min(orig_width, center_x + half_w))
+            y2_pixel = int(min(orig_height, center_y + half_h))
+            
+            # Ensure valid crop dimensions
+            if x2_pixel <= x_pixel or y2_pixel <= y_pixel:
+                return None
+            
+            # Crop the exact bounding box
+            exact_crop = img.crop((x_pixel, y_pixel, x2_pixel, y2_pixel))
+            
+            # Resize to a standard size
+            TARGET_SIZE = (224, 224)
+            resized_crop = exact_crop.resize(TARGET_SIZE, Image.Resampling.LANCZOS)
+            
+            crop_filename = f"{label}_{detection_idx}_{conf:.3f}.jpg"
+            crop_path = crops_dir / crop_filename
+            try:
+                resized_crop.save(crop_path, format='JPEG', quality=95)
+            except Exception as e:
+                print(f"DEBUG: Error saving crop: {str(e)}")
+                return None
+            
+            return {
+                'label': label,
+                'confidence': conf,
+                'bbox': {
+                    'x': cx - w/2,  # Convert to top-left for frontend
+                    'y': cy - h/2,  # Convert to top-left for frontend
+                    'width': w,
+                    'height': h
+                },
+                'cropped_path': f"/uploads/crops/{crop_filename}",
+                'class_id': cls_id
+            }
 
         # Process OBB detections
         if hasattr(r, 'obb') and r.obb is not None:
@@ -279,88 +374,70 @@ async def infer(image: UploadFile = File(...)):
             if hasattr(obb, 'data'):
                 box_data = obb.data.numpy()
                 if len(box_data) > 0:
-                    # Process each detection
                     for i in range(len(box_data)):
-                        cx, cy, w, h = box_data[i][:4]  # center-x, center-y, width, height
                         conf = float(box_data[i][5])    # confidence score
                         cls_id = int(box_data[i][6])    # class ID
-
-                        # Log raw detection values for debugging
-                        raw_cx, raw_cy, raw_w, raw_h = cx, cy, w, h
-                        print(f"DEBUG: raw detection[{i}]: cx={raw_cx}, cy={raw_cy}, w={raw_w}, h={raw_h}, conf={conf}, cls={cls_id}")
-
-                        # Normalize coordinates if they're in pixel coordinates (some model outputs may be in px)
-                        # Use the actual original image width/height saved earlier (orig_width, orig_height)
-                        if cx > 1 or cy > 1 or w > 1 or h > 1:
-                            try:
-                                cx = cx / orig_width
-                                w = w / orig_width
-                                cy = cy / orig_height
-                                h = h / orig_height
-                            except Exception as e:
-                                print(f"DEBUG: Error normalizing pixel coords: {e}")
-
-                        # Ensure values are in [0,1]
-                        cx = float(max(0.0, min(1.0, cx)))
-                        cy = float(max(0.0, min(1.0, cy)))
-                        w = float(max(0.0, min(1.0, w)))
-                        h = float(max(0.0, min(1.0, h)))
-
-                        print(f"DEBUG: normalized detection[{i}]: cx={cx}, cy={cy}, w={w}, h={h}")
-
-                        # Ensure values are in [0,1]
-                        # Normalize and store original YOLO format coordinates (center-based)
-                        cx = float(max(0.0, min(1.0, cx)))
-                        cy = float(max(0.0, min(1.0, cy)))
-                        w = float(max(0.0, min(1.0, w)))
-                        h = float(max(0.0, min(1.0, h)))
-
-                        # Get class label
-                        label = model.names.get(cls_id, f'class_{cls_id}')
+                        box_coords = box_data[i][:4]    # box coordinates
                         
-                        # Convert normalized center coordinates to pixels for cropping
-                        center_x = cx * orig_width
-                        center_y = cy * orig_height
-                        half_w = (w * orig_width) / 2
-                        half_h = (h * orig_height) / 2
+                        detection = process_detection_box(
+                            box_coords, conf, cls_id, orig_width, orig_height, 
+                            img, crops_dir, i
+                        )
+                        if detection:
+                            detections.append(detection)
+        
+        # Process regular bounding box detections (if OBB not available)
+        elif hasattr(r, 'boxes') and r.boxes is not None:
+            boxes = r.boxes.cpu()
+            if hasattr(boxes, 'data'):
+                box_data = boxes.data.numpy()
+                if len(box_data) > 0:
+                    for i in range(len(box_data)):
+                        # YOLO boxes format: x1, y1, x2, y2, conf, cls
+                        x1, y1, x2, y2 = box_data[i][:4]
+                        conf = float(box_data[i][4])
+                        cls_id = int(box_data[i][5])
                         
-                        # Calculate box corners for exact crop
-                        x_pixel = int(max(0, center_x - half_w))
-                        y_pixel = int(max(0, center_y - half_h))
-                        x2_pixel = int(min(orig_width, center_x + half_w))
-                        y2_pixel = int(min(orig_height, center_y + half_h))
+                        # Convert to center format for processing
+                        cx = (x1 + x2) / 2.0
+                        cy = (y1 + y2) / 2.0
+                        w = x2 - x1
+                        h = y2 - y1
                         
-                        # First crop the exact bounding box
-                        exact_crop = img.crop((x_pixel, y_pixel, x2_pixel, y2_pixel))
-                        
-                        # Resize to a standard size (224x224 is common for many vision models)
-                        TARGET_SIZE = (224, 224)
-                        resized_crop = exact_crop.resize(TARGET_SIZE, Image.Resampling.LANCZOS)
-                        
-                        crop_filename = f"{label}_{i}_{conf:.2f}.jpg"
-                        crop_path = crops_dir / crop_filename
-                        print(f"DEBUG: Saving crop to: {crop_path}")
-                        try:
-                            resized_crop.save(crop_path, format='JPEG', quality=95)
-                            print(f"DEBUG: Successfully saved crop to: {crop_path}")
-                            print(f"DEBUG: Crop file exists: {crop_path.exists()}")
-                        except Exception as e:
-                            print(f"DEBUG: Error saving crop: {str(e)}")
-                            raise
-                        
-                        detections.append({
-                            'label': label,
-                            'confidence': conf,
-                            'bbox': {
-                                'x': cx - w/2,  # Convert to top-left for frontend
-                                'y': cy - h/2,  # Convert to top-left for frontend
-                                'width': w,
-                                'height': h
-                            },
-                                                        'cropped_path': f"/uploads/crops/{crop_filename}"
-                        })
+                        detection = process_detection_box(
+                            [cx, cy, w, h], conf, cls_id, orig_width, orig_height,
+                            img, crops_dir, i
+                        )
+                        if detection:
+                            detections.append(detection)
+        
+        # Sort detections by confidence (highest first) for better quality
+        detections.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        # Limit to MAX_DET (already handled by YOLO, but ensure we don't exceed)
+        detections = detections[:MAX_DET]
+        
+        # Calculate detection statistics
+        class_counts = {}
+        for det in detections:
+            label = det['label']
+            class_counts[label] = class_counts.get(label, 0) + 1
+        
+        stats = {
+            'total_detections': len(detections),
+            'unique_classes': len(class_counts),
+            'class_distribution': class_counts,
+            'avg_confidence': sum(d['confidence'] for d in detections) / len(detections) if detections else 0.0
+        }
+        
+        print(f"📊 Detection stats: {stats['total_detections']} total, {stats['unique_classes']} classes, avg conf: {stats['avg_confidence']:.3f}")
+        print(f"📊 Class distribution: {class_counts}")
 
-        return JSONResponse({'success': True, 'detections': detections})
+        return JSONResponse({
+            'success': True, 
+            'detections': detections,
+            'stats': stats
+        })
     
     except Exception as e:
         print(f"DEBUG: Error during inference: {str(e)}")
