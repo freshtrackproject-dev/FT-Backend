@@ -148,46 +148,47 @@ IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.45'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
 # Class-specific confidence thresholds for all classes
-# Lower thresholds improve recall (catch more detections) at the cost of potential false positives
-# Based on validation results and user feedback
+# Optimized based on validation metrics: Precision (P), Recall (R), mAP50, mAP50-95
+# Lower thresholds for classes with lower recall to improve detection
+# Higher thresholds for high-performing classes to reduce false positives
 CLASS_SPECIFIC_THRESHOLDS = {
-    # Fresh fruits - lower thresholds for better detection
-    'Fresh_Apple': 0.40,
-    'Fresh_Banana': 0.40,     # Lowered from 0.48
-    'Fresh_Orange': 0.40,
-    'Fresh_Strawberry': 0.40,
-    'Fresh_Manggo': 0.40,
+    # Fresh fruits - thresholds based on validation performance
+    'Fresh_Apple': 0.50,      # P=0.999, R=1.0 - excellent, higher threshold to reduce false positives
+    'Fresh_Banana': 0.35,     # R=0.828 (lowest recall) - lower threshold to improve detection
+    'Fresh_Orange': 0.50,     # P=0.971, R=0.995 - excellent, higher threshold
+    'Fresh_Strawberry': 0.50, # P=0.989, R=0.994 - excellent, higher threshold
+    'Fresh_Manggo': 0.50,     # P=0.993, R=0.996 - excellent, higher threshold
     
-    # Fresh vegetables - lower thresholds for better detection
-    'Fresh_Carrot': 0.40,     # Already set - not getting detected
-    'Fresh_Pepper': 0.40,     # Already set - hardly getting detected
-    'Fresh_Cucumber': 0.40,
-    'Fresh_Okra': 0.40,
-    'Fresh_Potato': 0.40,
+    # Fresh vegetables - thresholds based on validation performance
+    'Fresh_Carrot': 0.40,     # R=0.945 - good, keep moderate threshold
+    'Fresh_Pepper': 0.35,     # R=0.927 - lower threshold to improve detection
+    'Fresh_Cucumber': 0.45,   # R=0.99 - excellent, slightly higher threshold
+    'Fresh_Okra': 0.35,       # R=0.88 (low recall) - lower threshold to improve detection
+    'Fresh_Potato': 0.45,     # R=0.981 - excellent, slightly higher threshold
     
-    # Fresh meats - slightly higher thresholds (usually more distinct)
-    'Fresh_Beef': 0.45,
-    'Fresh_Chicken': 0.45,
-    'Fresh_Pork': 0.45,
+    # Fresh meats - high performance, higher thresholds
+    'Fresh_Beef': 0.50,       # P=1.0, R=1.0 - perfect, higher threshold
+    'Fresh_Chicken': 0.50,    # P=0.965, R=0.988 - excellent, higher threshold
+    'Fresh_Pork': 0.50,       # P=0.999, R=0.998 - perfect, higher threshold
     
-    # Rotten fruits - lower thresholds for better detection
-    'Rotten_Apple': 0.35,     # Already set - not getting detected (confusion matrix shows high recall)
-    'Rotten_Banana': 0.35,    # Already set - not getting detected (confusion matrix shows high recall)
-    'Rotten_Orange': 0.40,
-    'Rotten_Strawberry': 0.40,
-    'Rotten_Manggo': 0.40,
+    # Rotten fruits - thresholds based on validation performance
+    'Rotten_Apple': 0.40,     # P=0.99, R=0.989 - excellent but user reported issues, moderate threshold
+    'Rotten_Banana': 0.40,    # P=0.999, R=1.0 - perfect but user reported issues, moderate threshold
+    'Rotten_Orange': 0.50,    # P=0.999, R=0.997 - excellent, higher threshold
+    'Rotten_Strawberry': 0.50, # P=0.984, R=0.992 - excellent, higher threshold
+    'Rotten_Manggo': 0.45,   # R=0.979 - excellent, slightly higher threshold
     
-    # Rotten vegetables - lower thresholds for better detection
-    'Rotten_Carrot': 0.40,
-    'Rotten_Pepper': 0.40,    # Already set - lower threshold for weakest class
-    'Rotten_Cucumber': 0.40,
-    'Rotten_Okra': 0.40,      # Lowered from 0.45
-    'Rotten_Potato': 0.50,    # Increased to reduce false positives (was being confused with Rotten_Apple)
+    # Rotten vegetables - thresholds based on validation performance
+    'Rotten_Carrot': 0.45,    # R=0.977 - excellent, slightly higher threshold
+    'Rotten_Pepper': 0.35,   # R=0.95, mAP50-95=0.701 (lowest) - lower threshold for better detection
+    'Rotten_Cucumber': 0.45, # R=0.977 - excellent, slightly higher threshold
+    'Rotten_Okra': 0.35,     # R=0.891 (low recall) - lower threshold to improve detection
+    'Rotten_Potato': 0.45,   # R=0.886 (low recall) - lower threshold from 0.50 to improve detection
     
-    # Rotten meats - slightly higher thresholds
-    'Rotten_Beef': 0.45,
-    'Rotten_Chicken': 0.45,
-    'Rotten_Pork': 0.45,
+    # Rotten meats - high performance, higher thresholds
+    'Rotten_Beef': 0.50,     # P=0.999, R=1.0 - perfect, higher threshold
+    'Rotten_Chicken': 0.50,  # P=0.993, R=1.0 - perfect, higher threshold
+    'Rotten_Pork': 0.50,    # P=0.997, R=1.0 - perfect, higher threshold
 }
 
 # Lazy load model
@@ -444,27 +445,6 @@ async def infer(image: UploadFile = File(...)):
                         )
                         if detection:
                             detections.append(detection)
-        
-        # Correct common misclassifications
-        def correct_misclassifications(detections):
-            """Apply corrections for known misclassification patterns."""
-            corrected = []
-            for det in detections:
-                label = det['label']
-                conf = det['confidence']
-                
-                # If Rotten_Potato has low confidence (< 0.55), it might be misclassified
-                # Prefer Rotten_Apple if confidence is borderline (common confusion)
-                if label == 'Rotten_Potato' and conf < 0.55:
-                    # Check if there's a Rotten_Apple detection nearby
-                    # For now, just increase threshold requirement (already done above)
-                    # Keep the detection but log it for review
-                    print(f"⚠️  Low confidence Rotten_Potato ({conf:.3f}) - possible misclassification")
-                
-                corrected.append(det)
-            return corrected
-        
-        detections = correct_misclassifications(detections)
         
         # Sort detections by confidence (highest first) for better quality
         detections.sort(key=lambda x: x['confidence'], reverse=True)
