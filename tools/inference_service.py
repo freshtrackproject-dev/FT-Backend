@@ -147,15 +147,47 @@ CONF_THRESHOLD = float(os.getenv('CONF_THRESHOLD', '0.5'))
 IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.45'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
-# Class-specific confidence thresholds for weaker performing classes
-# Based on validation results: Rotten_Okra (mAP50-95: 0.778), Rotten_Pepper (0.701)
+# Class-specific confidence thresholds for all classes
+# Lower thresholds improve recall (catch more detections) at the cost of potential false positives
+# Based on validation results and user feedback
 CLASS_SPECIFIC_THRESHOLDS = {
-    'Rotten_Okra': 0.45,      # Lower threshold for weaker class
-    'Rotten_Pepper': 0.40,    # Lower threshold for weakest class
-    'Fresh_Banana': 0.48,     # Slightly lower for better recall
-    'Rotten_Potato': 0.48,    # Slightly lower for better recall
-    'Fresh_Carrot': 0.40,     # Lower threshold - not getting detected
-    'Fresh_Pepper': 0.40,     # Lower threshold - hardly getting detected
+    # Fresh fruits - lower thresholds for better detection
+    'Fresh_Apple': 0.40,
+    'Fresh_Banana': 0.40,     # Lowered from 0.48
+    'Fresh_Orange': 0.40,
+    'Fresh_Strawberry': 0.40,
+    'Fresh_Manggo': 0.40,
+    
+    # Fresh vegetables - lower thresholds for better detection
+    'Fresh_Carrot': 0.40,     # Already set - not getting detected
+    'Fresh_Pepper': 0.40,     # Already set - hardly getting detected
+    'Fresh_Cucumber': 0.40,
+    'Fresh_Okra': 0.40,
+    'Fresh_Potato': 0.40,
+    
+    # Fresh meats - slightly higher thresholds (usually more distinct)
+    'Fresh_Beef': 0.45,
+    'Fresh_Chicken': 0.45,
+    'Fresh_Pork': 0.45,
+    
+    # Rotten fruits - lower thresholds for better detection
+    'Rotten_Apple': 0.35,     # Already set - not getting detected (confusion matrix shows high recall)
+    'Rotten_Banana': 0.35,    # Already set - not getting detected (confusion matrix shows high recall)
+    'Rotten_Orange': 0.40,
+    'Rotten_Strawberry': 0.40,
+    'Rotten_Manggo': 0.40,
+    
+    # Rotten vegetables - lower thresholds for better detection
+    'Rotten_Carrot': 0.40,
+    'Rotten_Pepper': 0.40,    # Already set - lower threshold for weakest class
+    'Rotten_Cucumber': 0.40,
+    'Rotten_Okra': 0.40,      # Lowered from 0.45
+    'Rotten_Potato': 0.40,    # Lowered from 0.48
+    
+    # Rotten meats - slightly higher thresholds
+    'Rotten_Beef': 0.45,
+    'Rotten_Chicken': 0.45,
+    'Rotten_Pork': 0.45,
 }
 
 # Lazy load model
