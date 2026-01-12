@@ -148,47 +148,48 @@ IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.45'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
 # Class-specific confidence thresholds for all classes
-# Optimized based on validation metrics: Precision (P), Recall (R), mAP50, mAP50-95
-# Lower thresholds for classes with lower recall to improve detection
+# Optimized based on validation metrics from YOLOv8m-obb model evaluation:
+# Overall: Box(P)=0.966, R=0.968, mAP50=0.98, mAP50-95=0.876
+# Lower thresholds for classes with lower recall/mAP to improve detection
 # Higher thresholds for high-performing classes to reduce false positives
 CLASS_SPECIFIC_THRESHOLDS = {
     # Fresh fruits - thresholds based on validation performance
-    'Fresh_Apple': 0.50,      # P=0.999, R=1.0 - excellent, higher threshold to reduce false positives
-    'Fresh_Banana': 0.35,     # R=0.828 (lowest recall) - lower threshold to improve detection
-    'Fresh_Orange': 0.50,     # P=0.971, R=0.995 - excellent, higher threshold
-    'Fresh_Strawberry': 0.50, # P=0.989, R=0.994 - excellent, higher threshold
-    'Fresh_Manggo': 0.50,     # P=0.993, R=0.996 - excellent, higher threshold
+    'Fresh_Apple': 0.50,      # P=0.999, R=1.0, mAP50=0.995, mAP50-95=0.966 - perfect performance
+    'Fresh_Banana': 0.30,     # P=0.938, R=0.828, mAP50=0.897, mAP50-95=0.722 - lowest recall, lower threshold
+    'Fresh_Orange': 0.50,     # P=0.971, R=0.995, mAP50=0.978, mAP50-95=0.865 - excellent performance
+    'Fresh_Strawberry': 0.50, # P=0.989, R=0.994, mAP50=0.995, mAP50-95=0.925 - excellent performance
+    'Fresh_Manggo': 0.50,     # P=0.993, R=0.996, mAP50=0.995, mAP50-95=0.801 - excellent performance
     
     # Fresh vegetables - thresholds based on validation performance
-    'Fresh_Carrot': 0.40,     # R=0.945 - good, keep moderate threshold
-    'Fresh_Pepper': 0.35,     # R=0.927 - lower threshold to improve detection
-    'Fresh_Cucumber': 0.45,   # R=0.99 - excellent, slightly higher threshold
-    'Fresh_Okra': 0.35,       # R=0.88 (low recall) - lower threshold to improve detection
-    'Fresh_Potato': 0.45,     # R=0.981 - excellent, slightly higher threshold
+    'Fresh_Carrot': 0.40,     # P=0.935, R=0.945, mAP50=0.981, mAP50-95=0.851 - good performance
+    'Fresh_Pepper': 0.35,     # P=0.944, R=0.927, mAP50=0.981, mAP50-95=0.787 - moderate recall
+    'Fresh_Cucumber': 0.45,   # P=0.961, R=0.99, mAP50=0.987, mAP50-95=0.908 - excellent performance
+    'Fresh_Okra': 0.30,       # P=0.923, R=0.88, mAP50=0.918, mAP50-95=0.75 - low recall, lower threshold
+    'Fresh_Potato': 0.45,     # P=0.968, R=0.981, mAP50=0.993, mAP50-95=0.891 - excellent performance
     
     # Fresh meats - high performance, higher thresholds
-    'Fresh_Beef': 0.50,       # P=1.0, R=1.0 - perfect, higher threshold
-    'Fresh_Chicken': 0.50,    # P=0.965, R=0.988 - excellent, higher threshold
-    'Fresh_Pork': 0.50,       # P=0.999, R=0.998 - perfect, higher threshold
+    'Fresh_Beef': 0.50,       # P=1.0, R=1.0, mAP50=0.995, mAP50-95=0.958 - perfect performance
+    'Fresh_Chicken': 0.50,    # P=0.965, R=0.988, mAP50=0.993, mAP50-95=0.921 - excellent performance
+    'Fresh_Pork': 0.50,       # P=0.999, R=0.998, mAP50=0.995, mAP50-95=0.988 - perfect performance
     
     # Rotten fruits - thresholds based on validation performance
-    'Rotten_Apple': 0.40,     # P=0.99, R=0.989 - excellent but user reported issues, moderate threshold
-    'Rotten_Banana': 0.40,    # P=0.999, R=1.0 - perfect but user reported issues, moderate threshold
-    'Rotten_Orange': 0.50,    # P=0.999, R=0.997 - excellent, higher threshold
-    'Rotten_Strawberry': 0.50, # P=0.984, R=0.992 - excellent, higher threshold
-    'Rotten_Manggo': 0.45,   # R=0.979 - excellent, slightly higher threshold
+    'Rotten_Apple': 0.45,     # P=0.99, R=0.989, mAP50=0.995, mAP50-95=0.967 - excellent performance
+    'Rotten_Banana': 0.45,    # P=0.999, R=1.0, mAP50=0.995, mAP50-95=0.891 - perfect recall
+    'Rotten_Orange': 0.50,    # P=0.999, R=0.997, mAP50=0.995, mAP50-95=0.98 - excellent performance
+    'Rotten_Strawberry': 0.50, # P=0.984, R=0.992, mAP50=0.994, mAP50-95=0.927 - excellent performance
+    'Rotten_Manggo': 0.45,   # P=0.937, R=0.979, mAP50=0.989, mAP50-95=0.848 - excellent recall
     
     # Rotten vegetables - thresholds based on validation performance
-    'Rotten_Carrot': 0.45,    # R=0.977 - excellent, slightly higher threshold
-    'Rotten_Pepper': 0.35,   # R=0.95, mAP50-95=0.701 (lowest) - lower threshold for better detection
-    'Rotten_Cucumber': 0.45, # R=0.977 - excellent, slightly higher threshold
-    'Rotten_Okra': 0.35,     # R=0.891 (low recall) - lower threshold to improve detection
-    'Rotten_Potato': 0.45,   # R=0.886 (low recall) - lower threshold from 0.50 to improve detection
+    'Rotten_Carrot': 0.45,    # P=0.965, R=0.977, mAP50=0.986, mAP50-95=0.862 - excellent performance
+    'Rotten_Pepper': 0.30,   # P=0.87, R=0.95, mAP50=0.944, mAP50-95=0.701 - lowest mAP50-95, lower threshold
+    'Rotten_Cucumber': 0.45, # P=0.945, R=0.977, mAP50=0.987, mAP50-95=0.876 - excellent performance
+    'Rotten_Okra': 0.30,     # P=0.93, R=0.891, mAP50=0.943, mAP50-95=0.778 - low recall, lower threshold
+    'Rotten_Potato': 0.40,   # P=0.922, R=0.886, mAP50=0.968, mAP50-95=0.73 - low recall, lower threshold
     
     # Rotten meats - high performance, higher thresholds
-    'Rotten_Beef': 0.50,     # P=0.999, R=1.0 - perfect, higher threshold
-    'Rotten_Chicken': 0.50,  # P=0.993, R=1.0 - perfect, higher threshold
-    'Rotten_Pork': 0.50,    # P=0.997, R=1.0 - perfect, higher threshold
+    'Rotten_Beef': 0.50,     # P=0.999, R=1.0, mAP50=0.995, mAP50-95=0.96 - perfect performance
+    'Rotten_Chicken': 0.50,  # P=0.993, R=1.0, mAP50=0.994, mAP50-95=0.942 - perfect recall
+    'Rotten_Pork': 0.50,    # P=0.997, R=1.0, mAP50=0.995, mAP50-95=0.968 - perfect performance
 }
 
 # Lazy load model
