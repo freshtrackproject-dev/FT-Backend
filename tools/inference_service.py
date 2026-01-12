@@ -148,48 +148,63 @@ IOU_THRESHOLD = float(os.getenv('IOU_THRESHOLD', '0.45'))
 MAX_DET = int(os.getenv('MAX_DET', '100'))
 
 # Class-specific confidence thresholds for all classes
-# Optimized based on validation metrics from YOLOv8m-obb model evaluation:
-# Overall: Box(P)=0.966, R=0.968, mAP50=0.98, mAP50-95=0.876
-# Lower thresholds for classes with lower recall/mAP to improve detection
+# Optimized based on validation metrics: Precision (P), Recall (R), mAP50, mAP50-95
+# Updated based on confusion matrix analysis to reduce misclassifications
+# Lower thresholds for classes with lower recall or high background confusion
 # Higher thresholds for high-performing classes to reduce false positives
 CLASS_SPECIFIC_THRESHOLDS = {
-    # Fresh fruits - thresholds based on validation performance
-    'Fresh_Apple': 0.50,      # P=0.999, R=1.0, mAP50=0.995, mAP50-95=0.966 - perfect performance
-    'Fresh_Banana': 0.30,     # P=0.938, R=0.828, mAP50=0.897, mAP50-95=0.722 - lowest recall, lower threshold
-    'Fresh_Orange': 0.50,     # P=0.971, R=0.995, mAP50=0.978, mAP50-95=0.865 - excellent performance
-    'Fresh_Strawberry': 0.50, # P=0.989, R=0.994, mAP50=0.995, mAP50-95=0.925 - excellent performance
-    'Fresh_Manggo': 0.50,     # P=0.993, R=0.996, mAP50=0.995, mAP50-95=0.801 - excellent performance
+    # Fresh fruits - thresholds based on validation performance and confusion matrix
+    'Fresh_Apple': 0.50,      # P=0.999, R=1.0 - excellent, higher threshold to reduce false positives
+    'Fresh_Banana': 0.30,     # R=0.828 (lowest recall), 24% background confusion - lower threshold to improve detection
+    'Fresh_Orange': 0.40,     # P=0.971, R=0.995, 13% background confusion - lower threshold to catch missed detections
+    'Fresh_Strawberry': 0.50, # P=0.989, R=0.994 - excellent, higher threshold
+    'Fresh_Manggo': 0.50,     # P=0.993, R=0.996 - excellent, higher threshold
     
-    # Fresh vegetables - thresholds based on validation performance
-    'Fresh_Carrot': 0.40,     # P=0.935, R=0.945, mAP50=0.981, mAP50-95=0.851 - good performance
-    'Fresh_Pepper': 0.35,     # P=0.944, R=0.927, mAP50=0.981, mAP50-95=0.787 - moderate recall
-    'Fresh_Cucumber': 0.45,   # P=0.961, R=0.99, mAP50=0.987, mAP50-95=0.908 - excellent performance
-    'Fresh_Okra': 0.30,       # P=0.923, R=0.88, mAP50=0.918, mAP50-95=0.75 - low recall, lower threshold
-    'Fresh_Potato': 0.45,     # P=0.968, R=0.981, mAP50=0.993, mAP50-95=0.891 - excellent performance
+    # Fresh vegetables - thresholds based on validation performance and confusion matrix
+    'Fresh_Carrot': 0.40,     # R=0.945 - good, keep moderate threshold
+    'Fresh_Pepper': 0.35,     # R=0.927 - lower threshold to improve detection
+    'Fresh_Cucumber': 0.45,   # R=0.99 - excellent, slightly higher threshold
+    'Fresh_Okra': 0.30,       # R=0.88 (low recall), 13% background confusion - lower threshold to improve detection
+    'Fresh_Potato': 0.45,     # R=0.981 - excellent, slightly higher threshold
     
     # Fresh meats - high performance, higher thresholds
-    'Fresh_Beef': 0.50,       # P=1.0, R=1.0, mAP50=0.995, mAP50-95=0.958 - perfect performance
-    'Fresh_Chicken': 0.50,    # P=0.965, R=0.988, mAP50=0.993, mAP50-95=0.921 - excellent performance
-    'Fresh_Pork': 0.50,       # P=0.999, R=0.998, mAP50=0.995, mAP50-95=0.988 - perfect performance
+    'Fresh_Beef': 0.50,       # P=1.0, R=1.0 - perfect, higher threshold
+    'Fresh_Chicken': 0.50,    # P=0.965, R=0.988 - excellent, higher threshold
+    'Fresh_Pork': 0.50,       # P=0.999, R=0.998 - perfect, higher threshold
     
-    # Rotten fruits - thresholds based on validation performance
-    'Rotten_Apple': 0.45,     # P=0.99, R=0.989, mAP50=0.995, mAP50-95=0.967 - excellent performance
-    'Rotten_Banana': 0.45,    # P=0.999, R=1.0, mAP50=0.995, mAP50-95=0.891 - perfect recall
-    'Rotten_Orange': 0.50,    # P=0.999, R=0.997, mAP50=0.995, mAP50-95=0.98 - excellent performance
-    'Rotten_Strawberry': 0.50, # P=0.984, R=0.992, mAP50=0.994, mAP50-95=0.927 - excellent performance
-    'Rotten_Manggo': 0.45,   # P=0.937, R=0.979, mAP50=0.989, mAP50-95=0.848 - excellent recall
+    # Rotten fruits - thresholds based on validation performance and confusion matrix
+    'Rotten_Apple': 0.40,     # P=0.99, R=0.989 - excellent, moderate threshold
+    'Rotten_Banana': 0.40,    # P=0.999, R=1.0 - perfect, moderate threshold
+    'Rotten_Orange': 0.40,    # P=0.999, R=0.997, 14% background confusion - lower threshold to catch missed detections
+    'Rotten_Strawberry': 0.50, # P=0.984, R=0.992 - excellent, higher threshold
+    'Rotten_Manggo': 0.45,   # R=0.979 - excellent, slightly higher threshold
     
-    # Rotten vegetables - thresholds based on validation performance
-    'Rotten_Carrot': 0.45,    # P=0.965, R=0.977, mAP50=0.986, mAP50-95=0.862 - excellent performance
-    'Rotten_Pepper': 0.30,   # P=0.87, R=0.95, mAP50=0.944, mAP50-95=0.701 - lowest mAP50-95, lower threshold
-    'Rotten_Cucumber': 0.45, # P=0.945, R=0.977, mAP50=0.987, mAP50-95=0.876 - excellent performance
-    'Rotten_Okra': 0.30,     # P=0.93, R=0.891, mAP50=0.943, mAP50-95=0.778 - low recall, lower threshold
-    'Rotten_Potato': 0.40,   # P=0.922, R=0.886, mAP50=0.968, mAP50-95=0.73 - low recall, lower threshold
+    # Rotten vegetables - thresholds based on validation performance and confusion matrix
+    'Rotten_Carrot': 0.45,    # R=0.977 - excellent, slightly higher threshold
+    'Rotten_Pepper': 0.30,    # R=0.95, mAP50-95=0.701 (lowest) - lower threshold for better detection
+    'Rotten_Cucumber': 0.45, # R=0.977 - excellent, slightly higher threshold
+    'Rotten_Okra': 0.30,     # R=0.891 (low recall), 5% background confusion - lower threshold to improve detection
+    'Rotten_Potato': 0.40,   # R=0.886 (low recall) - lower threshold to improve detection
     
     # Rotten meats - high performance, higher thresholds
-    'Rotten_Beef': 0.50,     # P=0.999, R=1.0, mAP50=0.995, mAP50-95=0.96 - perfect performance
-    'Rotten_Chicken': 0.50,  # P=0.993, R=1.0, mAP50=0.994, mAP50-95=0.942 - perfect recall
-    'Rotten_Pork': 0.50,    # P=0.997, R=1.0, mAP50=0.995, mAP50-95=0.968 - perfect performance
+    'Rotten_Beef': 0.50,     # P=0.999, R=1.0 - perfect, higher threshold
+    'Rotten_Chicken': 0.50,  # P=0.993, R=1.0 - perfect, higher threshold
+    'Rotten_Pork': 0.50,    # P=0.997, R=1.0 - perfect, higher threshold
+}
+
+# Common misclassification pairs from confusion matrix
+# Format: (misclassified_as, actual_class): confidence_adjustment_factor
+# Negative values reduce confidence, positive values increase confidence
+MISCLASSIFICATION_ADJUSTMENTS = {
+    # Fresh_Banana often misclassified as Fresh_Apple (12%)
+    ('Fresh_Apple', 'Fresh_Banana'): -0.15,  # Reduce confidence if Apple detected where Banana likely
+    # Fresh_Okra and Fresh_Orange confusion (1% each way)
+    ('Fresh_Orange', 'Fresh_Okra'): -0.10,
+    ('Fresh_Okra', 'Fresh_Orange'): -0.10,
+    # Rotten_Pepper misclassified as Rotten_Orange (1%)
+    ('Rotten_Orange', 'Rotten_Pepper'): -0.10,
+    # Rotten_Strawberry misclassified as Rotten_Potato (1%)
+    ('Rotten_Potato', 'Rotten_Strawberry'): -0.10,
 }
 
 # Lazy load model
@@ -318,10 +333,27 @@ async def infer(image: UploadFile = File(...)):
 
         r = results[0]
         detections = []
+        all_detections_raw = []  # Store all detections before filtering for misclassification analysis
         
         def get_class_threshold(label: str) -> float:
             """Get class-specific confidence threshold or use default."""
             return CLASS_SPECIFIC_THRESHOLDS.get(label, CONF_THRESHOLD)
+        
+        def apply_misclassification_adjustment(label: str, conf: float, other_detections: list) -> float:
+            """Apply confidence adjustments based on common misclassifications."""
+            adjusted_conf = conf
+            
+            # Check for common misclassification patterns
+            for (misclassified_as, actual_class), adjustment in MISCLASSIFICATION_ADJUSTMENTS.items():
+                if label == misclassified_as:
+                    # Check if there are nearby detections of the actual class
+                    for other_det in other_detections:
+                        if other_det['label'] == actual_class:
+                            # If actual class exists nearby, reduce confidence of misclassified class
+                            adjusted_conf += adjustment
+                            break
+            
+            return max(0.0, min(1.0, adjusted_conf))
         
         def process_detection_box(box_data, conf, cls_id, orig_width, orig_height, img, crops_dir, detection_idx):
             """Process a single detection box (OBB or regular)."""
@@ -333,6 +365,10 @@ async def infer(image: UploadFile = File(...)):
             
             # Get class label
             label = model.names.get(cls_id, f'class_{cls_id}')
+            
+            # Filter out background class (causes significant confusion)
+            if label.lower() == 'background':
+                return None
             
             # Apply class-specific threshold
             class_threshold = get_class_threshold(label)
@@ -420,7 +456,7 @@ async def infer(image: UploadFile = File(...)):
                             img, crops_dir, i
                         )
                         if detection:
-                            detections.append(detection)
+                            all_detections_raw.append(detection)
         
         # Process regular bounding box detections (if OBB not available)
         elif hasattr(r, 'boxes') and r.boxes is not None:
@@ -445,7 +481,20 @@ async def infer(image: UploadFile = File(...)):
                             img, crops_dir, i
                         )
                         if detection:
-                            detections.append(detection)
+                            all_detections_raw.append(detection)
+        
+        # Apply misclassification adjustments to all detections
+        for detection in all_detections_raw:
+            adjusted_conf = apply_misclassification_adjustment(
+                detection['label'], 
+                detection['confidence'], 
+                all_detections_raw
+            )
+            # Re-check threshold after adjustment
+            class_threshold = get_class_threshold(detection['label'])
+            if adjusted_conf >= class_threshold:
+                detection['confidence'] = adjusted_conf
+                detections.append(detection)
         
         # Sort detections by confidence (highest first) for better quality
         detections.sort(key=lambda x: x['confidence'], reverse=True)
