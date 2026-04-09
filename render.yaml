@@ -22,8 +22,8 @@ services:
       - key: PORT
         value: 10000
       - key: INFERENCE_URL
-        # The inference service URL
-        value: https://freshtrack-backend-inference.onrender.com/infer
+        # The inference service URL - set to the freshtrack-backend-1 inference service
+        value: https://ft-backend-0mfp.onrender.com/infer
       - key: STORAGE_PATH
         value: /app/data/storage_data.json
 

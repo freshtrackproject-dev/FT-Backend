@@ -494,7 +494,7 @@ async def infer(image: UploadFile = File(...)):
             class_threshold = get_class_threshold(detection['label'])
             if adjusted_conf >= class_threshold:
                 detection['confidence'] = adjusted_conf
-                            detections.append(detection)
+                detections.append(detection)
         
         # Sort detections by confidence (highest first) for better quality
         detections.sort(key=lambda x: x['confidence'], reverse=True)

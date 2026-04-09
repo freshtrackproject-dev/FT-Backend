@@ -3,7 +3,11 @@ const path = require("path");
 const { URL } = require("url");
 const { getStorageData } = require("../services/storageService");
 
-const INFERENCE_URL = process.env.INFERENCE_URL || 'http://localhost:8001/infer';
+// Ensure INFERENCE_URL always has the /infer endpoint
+let INFERENCE_URL = process.env.INFERENCE_URL || 'http://localhost:8001/infer';
+if (!INFERENCE_URL.endsWith('/infer')) {
+  INFERENCE_URL = INFERENCE_URL.replace(/\/$/, '') + '/infer';
+}
 const INFERENCE_BASE_URL = INFERENCE_URL.replace('/infer', '');
 
 const http = require('http');
@@ -67,6 +71,15 @@ class ImageProcessor {
         method: 'POST',
         headers: form.getHeaders()
       };
+
+      console.log('🔍 YOLO Request details:', {
+        url: INFERENCE_URL,
+        hostname: options.hostname,
+        port: options.port,
+        pathname: options.path,
+        method: options.method,
+        protocol: inferenceUrl.protocol
+      });
 
       const client = isHttps ? https : http;
       const req = client.request(options, (res) => {
@@ -199,4 +212,4 @@ async function preloadModel() {
   await imageProcessor.loadModel();
 }
 
-module.exports = { processImage, preloadModel, getModelInfo };
+module.exports = { processImage, preloadModel, getModelInfo, INFERENCE_URL, INFERENCE_BASE_URL };

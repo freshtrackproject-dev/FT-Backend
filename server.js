@@ -24,7 +24,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-const { processImage, preloadModel } = require('./services/imageProcessor');
+const { processImage, preloadModel, INFERENCE_URL } = require('./services/imageProcessor');
 const { getStorageData } = require('./services/storageService');
 const { getModelInfo } = require('./services/imageProcessor');
 
@@ -367,5 +367,6 @@ setInterval(() => {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`📡 Inference service URL: ${INFERENCE_URL}`);
   });
 })();
