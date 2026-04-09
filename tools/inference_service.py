@@ -35,6 +35,8 @@ import uvicorn
 import os
 import numpy as np
 import shutil
+from datetime import datetime
+import psutil  # For memory monitoring
 
 # Ensure uploads directory exists
 UPLOADS_DIR = Path("/app/uploads")
@@ -290,16 +292,19 @@ async def infer(image: UploadFile = File(...)):
     """
     tmp_path = None
     crops_dir = None
+    start_time = datetime.now()
     try:
+        print(f"\n🚀 [INFER START] Processing request at {start_time.isoformat()}")
+        
         # Create crops directory and ensure it exists
         crops_dir = Path('/app/uploads/crops')
         crops_dir.mkdir(parents=True, exist_ok=True)
-        print(f"DEBUG: Crops directory path: {crops_dir}")
-        print(f"DEBUG: Crops directory exists: {crops_dir.exists()}")
-        print(f"DEBUG: Crops directory is writable: {os.access(crops_dir, os.W_OK)}")
+        print(f"📁 Crops directory ready")
         
         # Save and preprocess uploaded image
         suffix = Path(image.filename).suffix or '.jpg'
+        print(f"📥 Receiving image: {image.filename}")
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp_path = Path(tmp.name)
             from PIL import Image
@@ -307,12 +312,18 @@ async def infer(image: UploadFile = File(...)):
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             img.save(tmp_path, format='JPEG', quality=95)
+            print(f"✅ Image saved to temp file: {tmp_path}")
             
         # Store original image size for later use
         orig_width, orig_height = img.size
+        print(f"📐 Image dimensions: {orig_width}x{orig_height}")
 
         # Run inference
+        print(f"🤖 Loading model...")
         model = get_model()
+        
+        print(f"🔍 Running YOLO inference...")
+        inference_start = datetime.now()
         results = model.predict(
             source=str(tmp_path),
             imgsz=IMG_SIZE,
@@ -328,7 +339,20 @@ async def infer(image: UploadFile = File(...)):
             save_crop=False  # Don't use YOLO's built-in cropping
         )
         
+        inference_time = (datetime.now() - inference_start).total_seconds()
+        print(f"✅ YOLO inference completed in {inference_time:.2f}s")
+        
+        # Check memory usage
+        try:
+            process = psutil.Process()
+            mem_info = process.memory_info()
+            mem_mb = mem_info.rss / 1024 / 1024
+            print(f"💾 Current memory usage: {mem_mb:.1f}MB")
+        except:
+            pass
+        
         if not results:
+            print(f"ℹ️ No detections found, returning empty results")
             return JSONResponse({'success': True, 'detections': []})
 
         r = results[0]
@@ -515,6 +539,8 @@ async def infer(image: UploadFile = File(...)):
             'avg_confidence': sum(d['confidence'] for d in detections) / len(detections) if detections else 0.0
         }
         
+        elapsed = (datetime.now() - start_time).total_seconds()
+        print(f"✅ [INFER SUCCESS] Completed in {elapsed:.2f}s with {stats['total_detections']} detections")
         print(f"📊 Detection stats: {stats['total_detections']} total, {stats['unique_classes']} classes, avg conf: {stats['avg_confidence']:.3f}")
         print(f"📊 Class distribution: {class_counts}")
 
@@ -525,8 +551,22 @@ async def infer(image: UploadFile = File(...)):
         })
     
     except Exception as e:
-        print(f"DEBUG: Error during inference: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        elapsed = (datetime.now() - start_time).total_seconds()
+        error_msg = str(e)
+        print(f"\n❌ [INFER ERROR] Request failed after {elapsed:.2f}s")
+        print(f"   Error: {error_msg}")
+        print(f"   Type: {type(e).__name__}")
+        
+        # Try to log memory at time of error
+        try:
+            process = psutil.Process()
+            mem_info = process.memory_info()
+            mem_mb = mem_info.rss / 1024 / 1024
+            print(f"   Memory: {mem_mb:.1f}MB")
+        except:
+            pass
+        
+        raise HTTPException(status_code=500, detail=f"Inference error: {error_msg}")
     
     finally:
         # Clean up temporary input file
